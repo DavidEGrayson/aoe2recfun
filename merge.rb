@@ -26,15 +26,16 @@ def chat_should_be_merged?(json)
 end
 
 def format_merged_chat(info)
-  # TODO: need access to real player numbers and names in here!
-
   color_code = '@#' + info.fetch(:from).to_s
+  to_label = '<' + info.fetch(:to).join(',') + '>' # TODO: real player numbers
+  from_name = "3 Elavid"  # TODO: real player number and name
+  msg = info.fetch(:message)
 
-  json = JSON.dump(  # tmphax
-    'player' => 1,
-    'channel' => 0,
-    'message' => "WHAT UP",
-    'messageAGP' => '@#23 Elavid: WHAT IS UP'
+  json = JSON.dump(
+    'player' => info.fetch(:from),
+    'channel' => info.fetch(:channel),
+    'message' => msg,
+    'messageAGP' => "#{color_code}#{to_label}#{from_name}: #{msg}"
   ).b
 
   [4, -1, json.size].pack('LlL') + json
@@ -106,7 +107,8 @@ inputs.each(&:close)
 
 # tmphax
 merged_chats = [
-  { time: 10289, from: 2, to: [2], channel: 0, message: "hi" }
+  { time: 10000, from: 2, to: [1,3], channel: 0, message: "hi1" },
+  { time: 11000, from: 2, to: [1,3], channel: 0, message: "hi2 @#1 hi2" },
 ]
 
 puts
