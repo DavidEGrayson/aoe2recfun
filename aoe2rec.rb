@@ -3,25 +3,70 @@
 # https://github.com/happyleavesaoc/aoc-mgz/blob/master/mgz/body/__init__.py
 # https://github.com/happyleavesaoc/aoc-mgz/blob/master/mgz/enums.py
 
-def aoe2rec_parse_header(io)
-  header_length = io.read(4).unpack1('V')
-  header = io.read(header_length - 4)
+require 'stringio'
+require 'zlib'
+
+def aoe2rec_parse_de_header(io)
+  r = {}
+  r[:version], r[:interval_version], r[:game_options_version], dlc_count =
+    io.read(16).unpack('FLLL')
+
+  r[:dlc_ids] = io.read(dlc_count * 4).unpack('L*')
+
+  # TODO: finish parsing
+
+  r
 end
 
-def aoe2rec_parse_meta(io)
+def aoe2rec_parse_compressed_header(header)
+  r = {}
+  io = StringIO.new(header)
+  r[:check] = io.read(4).unpack1('V')
+  inflater = Zlib::Inflate.new(-15)
+  io = StringIO.new(inflater.inflate(io.read))
+  game_version = ''.b
+  while true
+    c = io.read(1)
+    break if c == "\0"
+    game_version << c
+  end
+  r[:game_version] = game_version
+  if r[:game_version] != "VER 9.4"
+    raise "Expected game_version to be 'VER 9.4', got #{r[:game_version]}."
+  end
+
+  r[:save_version] = io.read(4).unpack1('F').round(2)
+  if r[:save_version] < 12.97
+    raise "Expected save_version to be at least 12.97, got #{r[:save_version]}."
+  end
+
+  r.merge! aoe2rec_parse_de_header(io)
+
+  # NOTE: There is other stuff in the header that we have not parsed.
+
+  r
+end
+
+def aoe2rec_parse_header(io)
+  r = {}
+  header_length = io.read(4).unpack1('V')
+  header = io.read(header_length - 4)
+
+  r = aoe2rec_parse_compressed_header(header)
+
   parts = io.read(32).unpack('VVVVVVVV')
-  meta = {
-    log_version: parts[0],
-    player_id: parts[4], # TODO: is this name accurate?
-    other_version: parts[7],
-  }
-  if meta[:log_version] != 5
-    raise NotSupportedError, "log_version is not 5."
+  r[:log_version] = parts[0]
+  r[:player_id] = parts[4]
+  r[:other_version] = parts[7]
+
+  if r[:log_version] != 5
+    raise "Expected log_version to be 5, got #{r[:log_version]}."
   end
-  if meta[:other_version] != 0
-    raise NotSupportedError, "other_version is not 0."
+  if r[:other_version] != 0
+    raise "Expected other_version to be 0, got #{r[:other_version]}."
   end
-  meta
+
+  r
 end
 
 def aoe2rec_parse_action(io)
@@ -72,13 +117,6 @@ def aoe2rec_parse_operation(io)
   end
 end
 
-def aoe2rec_parse(io)
-  aoe2rec_parse_header(io)
-  yield aoe2rec_parse_meta(io)
-  while (op = aoe2rec_parse_operation(io))
-    yield op
-  end
-end
 
 # Acts as a normal file object except it intercepts calls to read and stores
 # the results in a buffer.  This makes it possible to duplicate a file as we

@@ -7,11 +7,13 @@ $stdout.sync = true
 
 filenames = ARGV
 filenames.each do |filename|
-  File.open(filename, 'rb') do |file|
+  File.open(filename, 'rb') do |io|
     puts "#{filename}:"
-    aoe2rec_parse(file) do |x|
-      if x[:operation] == :chat
-        p x
+    p aoe2rec_parse_header(io)
+    exit 0 # tmphax
+    while (op = aoe2rec_parse_operation(io))
+      if op.fetch(:operation) == :chat
+        p op.fetch(:json)
       end
     end
   end

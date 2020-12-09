@@ -57,10 +57,9 @@ end
 puts "Scanning for mergeable chat messages from input files..."
 player_ids = {}
 inputs.each do |io|
-  aoe2rec_parse_header(io)
-  meta = aoe2rec_parse_meta(io)
+  header = aoe2rec_parse_header(io)
   puts "#{io.path}: #{meta}"
-  player_ids[io] = meta.fetch(:player_id)
+  player_ids[io] = header.fetch(:player_id)
 end
 
 time = 0
