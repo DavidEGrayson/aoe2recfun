@@ -55,11 +55,53 @@ inputs = filenames.collect do |filename|
 end
 
 puts "Scanning for mergeable chat messages from input files..."
-player_ids = {}
+
+# Parse the header of each input file.
+io_to_player_id = {}
+headers = []
 inputs.each do |io|
-  header = aoe2rec_parse_header(io)
-  puts "#{io.path}: #{meta}"
-  player_ids[io] = header.fetch(:player_id)
+  headers << header = aoe2rec_parse_header(io)
+  io_to_player_id[io] = header.fetch(:player_id)
+end
+
+# Check the headers for consistency after masking out fields that we expect
+# to be inconsistent.
+consistent_headers = headers.collect do |header|
+  header.merge(player_id: nil)
+end
+consistent_headers.each do |header|
+  header[:dat_crc] = 0
+  if header != consistent_headers[0]
+    $stderr.puts "WARNING: These recorded games have inconsistent headers!"
+    $stderr.puts "Are they really all from the same game?"
+    header.keys.each do |key|
+      if header[key] != headers[0][key]
+        $stderr.puts "(Field #{key} is one field that is inconsistent.)"
+        break
+      end
+    end
+    break
+  end
+end
+
+# Build a player info hash so we can get handy info from player IDs.
+player_info = {}
+headers[0].fetch(:players).each do |pl|
+  player_info[pl.fetch(:player_id)] = {
+    color_number: pl.fetch(:color_id) + 1,
+    name: pl.fetch(:name)
+  }
+end
+inputs.each do |io|
+  player_info[io_to_player_id[io]][:path] = io.path
+end
+
+puts "Players:"
+player_info.each do |id, pi|
+  puts "ID %d: %d %-20s %s" % [
+    id, pi.fetch(:color_number), pi.fetch(:name),
+    pi.fetch(:path, 'No recorded game')
+  ]
 end
 
 time = 0
@@ -71,11 +113,11 @@ while true
   inputs.each do |io|
     while true
       op = aoe2rec_parse_operation(io)
-      #puts "PID#{player_ids.fetch(io)}: #{op.inspect}"
+      #puts "PID#{io_to_player_id.fetch(io)}: #{op.inspect}"
       break if op.nil?  # Handle EOF
       data_remaining = true
       if op[:operation] == :sync
-        #puts "PID#{player_ids.fetch(io)}: sync #{op.fetch(:time_increment)}"
+        #puts "PID#{io_to_player_id.fetch(io)}: sync #{op.fetch(:time_increment)}"
         time_increment ||= op.fetch(:time_increment)
         if time_increment != op.fetch(:time_increment)
           raise "Inconsistent time increments!  Are all files really from the same game?"
@@ -88,7 +130,7 @@ while true
           chats << {
             time: time,
             from: json.fetch('player'),
-            to: player_ids.fetch(io),
+            to: io_to_player_id.fetch(io),
             channel: json.fetch('channel'),
             message: json.fetch('message'),
           }
@@ -122,7 +164,6 @@ input = InputWrapper.new(input)
 output = File.open(output_filename, 'wb')
 
 aoe2rec_parse_header(input)
-aoe2rec_parse_meta(input)
 output.write(input.flush_recently_read)
 
 time = 0

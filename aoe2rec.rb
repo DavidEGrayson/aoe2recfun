@@ -2,18 +2,85 @@
 # References:
 # https://github.com/happyleavesaoc/aoc-mgz/blob/master/mgz/body/__init__.py
 # https://github.com/happyleavesaoc/aoc-mgz/blob/master/mgz/enums.py
+# https://github.com/happyleavesaoc/aoc-mgz/blob/master/mgz/header/de.py
 
 require 'stringio'
 require 'zlib'
+require 'digest/sha2'
 
-def aoe2rec_parse_de_header(io)
+def aoe2rec_parse_de_string(io)
+  separator, length = io.read(4).unpack('SS')
+  raise if separator != 2656
+  io.read(length)
+end
+
+def aoe2rec_parse_player(io)
+  r = {}
+
+  r[:dlc_id], r[:color_id],
+    r[:selected_color], r[:selected_team_id],
+    r[:resolved_team_id], r[:dat_crc],
+    r[:mp_game_version], r[:civ_id] =
+    io.read(2*4 + 3 + 8 + 5).unpack('LlCCCa8CL')
+
+  r[:ai_type] = aoe2rec_parse_de_string(io)
+  r[:ai_civ_name_index] = io.read(1).unpack1('C')
+  r[:ai_name] = aoe2rec_parse_de_string(io)
+  r[:name] = aoe2rec_parse_de_string(io)
+
+  r[:type], r[:profile_id],
+    r[:unknown1], r[:player_id],
+    r[:hd_rm_elo], r[:hd_dm_elo],
+    r[:animated_destruction_enabled], r[:custom_ai] =
+    io.read(6*4 + 2).unpack('LLLLLLCC')
+
+  r
+end
+
+def aoe2rec_parse_de_header(io, save_version)
   r = {}
   r[:version], r[:interval_version], r[:game_options_version], dlc_count =
     io.read(16).unpack('FLLL')
 
   r[:dlc_ids] = io.read(dlc_count * 4).unpack('L*')
 
-  # TODO: finish parsing
+  r[:dataset_ref], r[:difficulty],
+    r[:selected_map_id], r[:resolved_map_id],
+    r[:reveal_map], r[:victory_type_id],
+    r[:starting_resources_id], r[:starting_age_id],
+    r[:ending_age_id], r[:game_type],
+    separator1, separator2,
+    r[:speed], r[:treaty_length],
+    r[:population_limit], r[:num_players],
+    r[:unused_player_color], r[:victory_amount],
+    separator3, r[:trade_enabled],
+    r[:team_bonus_disabled], r[:random_positions],
+    r[:all_techs], r[:num_starting_units],
+    r[:lock_teams], r[:lock_speed],
+    r[:multiplayer], r[:cheats],
+    r[:record_game], r[:animals_enabled],
+    r[:predators_enabled], r[:turbo_enabled],
+    r[:shared_exploration], r[:team_positions] =
+    io.read(19*4 + 15).unpack('LLLLLLLLLLLLFLLLLLLCCCCCCCCCCCCCCC')
+
+  raise if separator1 != 155555
+  raise if separator2 != 155555
+  raise if separator3 != 155555
+
+  if save_version >= 13.34
+    unknown1, unknown2 = io.read(8).unpack('LL')
+  end
+
+  separator4 = io.read(4).unpack1('L')
+
+  raise if separator4 != 155555
+
+  r[:players] = 8.times.collect { aoe2rec_parse_player(io) }
+  r[:players].reject! { |pl| pl[:player_id] == 0xFFFFFFFF }
+
+  # p io.read(100) # tmphax
+
+  # NOTE: There is other stuff in the DE header that we have not parsed.
 
   r
 end
@@ -24,6 +91,7 @@ def aoe2rec_parse_compressed_header(header)
   r[:check] = io.read(4).unpack1('V')
   inflater = Zlib::Inflate.new(-15)
   io = StringIO.new(inflater.inflate(io.read))
+
   game_version = ''.b
   while true
     c = io.read(1)
@@ -40,7 +108,7 @@ def aoe2rec_parse_compressed_header(header)
     raise "Expected save_version to be at least 12.97, got #{r[:save_version]}."
   end
 
-  r.merge! aoe2rec_parse_de_header(io)
+  r.merge! aoe2rec_parse_de_header(io, r[:save_version])
 
   # NOTE: There is other stuff in the header that we have not parsed.
 
