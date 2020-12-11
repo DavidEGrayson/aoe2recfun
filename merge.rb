@@ -18,6 +18,9 @@ def chat_should_be_merged?(json)
   # Skip all-chat, since that will show up fine in every file.
   return false if json.fetch('channel') == 1
 
+  # Skip metadata messages from this program.
+  return false if json.fetch('channel') == 100
+
   # Skip age advancement messages (and weird messages from other games,
   # where messageAGP is empty).
   return false if !json.fetch('messageAGP').include?(':')
@@ -26,16 +29,31 @@ def chat_should_be_merged?(json)
 end
 
 def format_merged_chat(info)
-  color_code = '@#' + info.fetch(:from).to_s
-  to_label = '<' + info.fetch(:to).join(',') + '>' # TODO: real player numbers
-  from_name = "3 Elavid"  # TODO: real player number and name
+  to_color_numbers = info.fetch(:to).collect do |id|
+    @player_info.fetch(id).fetch(:color_number)
+  end.sort
+  if to_color_numbers.size == 0
+    to_label = ''
+  elsif to_color_numbers.size == @player_info.size
+    to_label = '<All>'
+  else
+    to_label = '<' + to_color_numbers.join(',') + '>'
+  end
+
+  from = info.fetch(:from)
+  if from != 0
+    color_code = '@#' + from.to_s
+    from_info = @player_info.fetch(from)
+    from_name = "#{from_info.fetch(:color_number)} #{from_info.fetch(:name)}: "
+  end
+
   msg = info.fetch(:message)
 
   json = JSON.dump(
     'player' => info.fetch(:from),
     'channel' => info.fetch(:channel),
     'message' => msg,
-    'messageAGP' => "#{color_code}#{to_label}#{from_name}: #{msg}"
+    'messageAGP' => "#{color_code}#{to_label}#{from_name}#{msg}"
   ).b
 
   [4, -1, json.size].pack('LlL') + json
@@ -53,8 +71,6 @@ input_filenames = filenames
 inputs = filenames.collect do |filename|
   File.open(filename, 'rb')
 end
-
-puts "Scanning for mergeable chat messages from input files..."
 
 # Parse the header of each input file.
 io_to_player_id = {}
@@ -85,24 +101,26 @@ consistent_headers.each do |header|
 end
 
 # Build a player info hash so we can get handy info from player IDs.
-player_info = {}
+@player_info = {}
 headers[0].fetch(:players).each do |pl|
-  player_info[pl.fetch(:player_id)] = {
+  @player_info[pl.fetch(:player_id)] = {
     color_number: pl.fetch(:color_id) + 1,
     name: pl.fetch(:name)
   }
 end
 inputs.each do |io|
-  player_info[io_to_player_id[io]][:path] = io.path
+  @player_info[io_to_player_id[io]][:path] = io.path
 end
 
 puts "Players:"
-player_info.each do |id, pi|
+@player_info.each do |id, pi|
   puts "ID %d: %d %-20s %s" % [
     id, pi.fetch(:color_number), pi.fetch(:name),
     pi.fetch(:path, 'No recorded game')
   ]
 end
+
+puts "Scanning for mergeable chat messages from input files..."
 
 time = 0
 chats = []
@@ -146,11 +164,37 @@ end
 
 inputs.each(&:close)
 
-# tmphax
+# Merge the chat messages
+players_included = []
+@player_info.each do |id, pl|
+  if pl[:path]
+    players_included << "#{pl.fetch(:color_number)} #{pl.fetch(:name)}"
+  end
+end
+if players_included.size == @player_info.size
+  players_desc = "all players"
+else
+  players_desc = players_included.join(', ')
+end
+welcome = "Merged chat enabled for #{players_desc}"
 merged_chats = [
-  { time: 10000, from: 2, to: [1,3], channel: 0, message: "hi1" },
-  { time: 11000, from: 2, to: [1,3], channel: 0, message: "hi2 @#1 hi2" },
+  { time: 200, from: 0, to: [], channel: 1, message: welcome },
 ]
+last_chat = {}
+chats.each do |chat|
+  from = chat.fetch(:from)
+  last = last_chat[from]
+  if !(last && last.fetch(:message) == chat.fetch(:message))
+    last = chat.dup
+    merged_chats << last
+    last_chat[from] = last
+    last[:to] = []
+  end
+  last_chat[from][:to] << chat.fetch(:to)
+end
+merged_chats.each do |chat|
+  chat.fetch(:to).delete(chat.fetch(:from))
+end
 
 puts
 puts "Merged chat messages:"
