@@ -14,6 +14,16 @@ require_relative 'aoe2rec'
 
 $stdout.sync = true
 
+# AOE2 recorded games are small enough that we should just read them in all at
+# once, and this makes the program about 15x faster.
+def open_input_file(filename)
+  File.open(filename, 'rb') { |f| StringIO.new f.read }
+end
+
+def open_output_file(filename)
+  File.open(filename, 'wb')
+end
+
 def chat_should_be_merged?(json)
   # Skip all-chat, since that will show up fine in every file.
   return false if json.fetch('channel') == 1
@@ -59,6 +69,7 @@ def format_merged_chat(info)
   [4, -1, json.size].pack('LlL') + json
 end
 
+# Parse the arguments
 input_filenames = []
 output_filename = nil
 arg_enum = ARGV.each
@@ -74,7 +85,6 @@ loop do
     input_filenames << arg
   end
 end
-
 if output_filename.nil? || input_filenames.size < 2
   puts "Usage: ./merge.rb INPUT1 INPUT2 ... -o OUTPUT"
   exit 1
@@ -83,8 +93,7 @@ end
 # Open each file and parse its header.
 inputs = []
 input_filenames.each do |filename|
-  io = File.open(filename, 'rb')
-  # io = File.open(filename, 'rb') { |f| StringIO.new f.read }
+  io = open_input_file(filename)
   header = aoe2rec_parse_header(io)
   inputs << {
     filename: filename,
@@ -124,6 +133,7 @@ inputs[0][:header][:players].each do |pl|
   }
 end
 
+# Print a summary of the players
 puts "Players:"
 @player_info.each do |id, pi|
   puts "ID %d: %d %-20s %s" % [
@@ -133,7 +143,6 @@ puts "Players:"
 end
 
 puts "Scanning for mergeable chat messages from input files..."
-
 time = 0
 chats = []
 while true
@@ -143,11 +152,9 @@ while true
   inputs.each do |input|
     while true
       op = aoe2rec_parse_operation(input[:io])
-      #puts "PID#{io_to_player_id.fetch(io)}: #{op.inspect}"
       break if op.nil?  # Handle EOF
       data_remaining = true
       if op[:operation] == :sync
-        #puts "PID#{io_to_player_id.fetch(io)}: sync #{op.fetch(:time_increment)}"
         time_increment ||= op.fetch(:time_increment)
         if time_increment != op.fetch(:time_increment)
           raise "Inconsistent time increments!  Are all files really from the same game?"
@@ -164,8 +171,6 @@ while true
             channel: json.fetch('channel'),
             message: json.fetch('message'),
           }
-          # puts json
-          # puts chats.last
         end
       end
     end
@@ -214,10 +219,8 @@ merged_chats.each do |chat|
   puts chat
 end
 
-input = File.open(input_filenames.first, 'rb')
-input = InputWrapper.new(input)
-
-output = File.open(output_filename, 'wb')
+input = InputWrapper.new(open_input_file(input_filenames.first))
+output = open_output_file(output_filename)
 
 aoe2rec_parse_header(input)
 output.write(input.flush_recently_read)
