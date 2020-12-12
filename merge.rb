@@ -208,11 +208,10 @@ players_included = []
   end
 end
 if players_included.size == @player_info.size
-  players_desc = "all players"
+  welcome = "This replay contains chats from all players."
 else
-  players_desc = players_included.join(', ')
+  welcome = "This replay contains chats from/to " + players_included.join(', ') + "."
 end
-welcome = "Merged chat enabled for #{players_desc}"
 merged_chats = [
   { time: 200, player: 0, to: [], channel: 1, message: welcome },
 ]
@@ -258,6 +257,7 @@ while true
     chat = JSON.parse(op.fetch(:json), symbolize_names: true)
     if chat_should_be_merged?(chat)
       input.flush_recently_read
+    elsif chat[:messageAGP].empty?
     else
       puts colorize_chat(chat.fetch(:messageAGP), @player_info)
     end
