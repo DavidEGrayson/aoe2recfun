@@ -5,7 +5,6 @@
 # Usage:
 # ./merge.rb INPUT1 INPUT2 ... -o OUTPUT
 
-# TODO: merge chat
 # TODO: merge flares (flare is an action!)
 # TODO: merge view lock
 
@@ -26,14 +25,14 @@ end
 
 def chat_should_be_merged?(json)
   # Skip all-chat, since that will show up fine in every file.
-  return false if json.fetch('channel') == 1
+  return false if json.fetch(:channel) == 1
 
   # Skip metadata messages from this program.
-  return false if json.fetch('channel') == 100
+  return false if json.fetch(:channel) == 100
 
   # Skip age advancement messages (and weird messages from other games,
   # where messageAGP is empty).
-  return false if !json.fetch('messageAGP').include?(':')
+  return false if !json.fetch(:messageAGP).include?(':')
 
   true
 end
@@ -50,7 +49,7 @@ def format_merged_chat(info)
     to_label = '<' + to_color_numbers.join(',') + '>'
   end
 
-  from = info.fetch(:from)
+  from = info.fetch(:player)
   if from != 0
     color_code = '@#' + from.to_s
     from_info = @player_info.fetch(from)
@@ -60,14 +59,15 @@ def format_merged_chat(info)
   msg = info.fetch(:message)
 
   json = JSON.dump(
-    'player' => info.fetch(:from),
-    'channel' => info.fetch(:channel),
-    'message' => msg,
-    'messageAGP' => "#{color_code}#{to_label}#{from_name}#{msg}"
+    player: info.fetch(:player),
+    channel: info.fetch(:channel),
+    message: msg,
+    messageAGP: "#{color_code}#{to_label}#{from_name}#{msg}"
   ).b
 
   [4, -1, json.size].pack('LlL') + json
 end
+
 
 # Parse the arguments
 input_filenames = []
@@ -162,15 +162,10 @@ while true
         break
       end
       if op[:operation] == :chat
-        json = JSON.parse(op.fetch(:json))
-        if chat_should_be_merged?(json)
-          chats << {
-            time: time,
-            from: json.fetch('player'),
-            to: input.fetch(:player_id),
-            channel: json.fetch('channel'),
-            message: json.fetch('message'),
-          }
+        chat = JSON.parse(op.fetch(:json), symbolize_names: true)
+        if chat_should_be_merged?(chat)
+          chat.merge! time: time, to: [input.fetch(:player_id)]
+          chats << chat
         end
       end
     end
@@ -195,22 +190,23 @@ else
 end
 welcome = "Merged chat enabled for #{players_desc}"
 merged_chats = [
-  { time: 200, from: 0, to: [], channel: 1, message: welcome },
+  { time: 200, player: 0, to: [], channel: 1, message: welcome },
 ]
 last_chat = {}
 chats.each do |chat|
-  from = chat.fetch(:from)
-  last = last_chat[from]
+  player = chat.fetch(:player)
+  last = last_chat[player]
   if !(last && last.fetch(:message) == chat.fetch(:message))
     last = chat.dup
     merged_chats << last
-    last_chat[from] = last
-    last[:to] = []
+    last_chat[player] = last
+  else
+    last_chat[player][:to].concat chat.fetch(:to)
   end
-  last_chat[from][:to] << chat.fetch(:to)
 end
 merged_chats.each do |chat|
-  chat.fetch(:to).delete(chat.fetch(:from))
+  # TODO: update messageAGP here too
+  chat.fetch(:to).delete(chat.fetch(:player))
 end
 
 input = InputWrapper.new(open_input_file(input_filenames.first))
@@ -235,10 +231,11 @@ while true
   end
 
   if op[:operation] == :chat
-    json = JSON.parse(op.fetch(:json))
-    puts json
+    json = JSON.parse(op.fetch(:json), symbolize_names: true)
     if chat_should_be_merged?(json)
       input.flush_recently_read
+    else
+      puts json
     end
   end
 
