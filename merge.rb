@@ -213,12 +213,6 @@ merged_chats.each do |chat|
   chat.fetch(:to).delete(chat.fetch(:from))
 end
 
-puts
-puts "Merged chat messages:"
-merged_chats.each do |chat|
-  puts chat
-end
-
 input = InputWrapper.new(open_input_file(input_filenames.first))
 output = open_output_file(output_filename)
 
@@ -235,17 +229,18 @@ while true
   end
 
   while !merged_chats.empty? && merged_chats.first.fetch(:time) <= time
-    output.write(format_merged_chat(merged_chats.shift))
+    chat = merged_chats.shift
+    puts chat
+    output.write(format_merged_chat(chat))
   end
 
   if op[:operation] == :chat
     json = JSON.parse(op.fetch(:json))
+    puts json
     if chat_should_be_merged?(json)
       input.flush_recently_read
     end
   end
-
-  # TODO: write merged chats if it's time to
 
   output.write(input.flush_recently_read)
 end
