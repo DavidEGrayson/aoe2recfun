@@ -43,7 +43,7 @@ def update_chat_message_agp(chat)
   end.sort
   if to_color_numbers.size == 0
     to_label = ''
-  elsif to_color_numbers.size == @player_info.size
+  elsif to_color_numbers.size >= @player_info.size - 1
     to_label = '<All>'
   else
     to_label = '<' + to_color_numbers.join(',') + '>'
@@ -61,7 +61,7 @@ def update_chat_message_agp(chat)
   chat[:messageAGP] = "#{color_code}#{to_label}#{from_name}#{msg}"
 end
 
-def format_merged_chat(chat)
+def format_chat(chat)
   json = JSON.dump(
     player: chat.fetch(:player),
     channel: chat.fetch(:channel),
@@ -71,6 +71,25 @@ def format_merged_chat(chat)
   [4, -1, json.size].pack('LlL') + json
 end
 
+VT100_COLORS = [
+  "\e[0m",  # 0 = normal
+  "\e[94m", # 1 = blue
+  "\e[91m", # 2 = red
+  "\e[92m", # 3 = green
+  "\e[93m", # 4 = yellow
+  "\e[96m", # 5 = cyan
+  "\e[95m", # 6 = magenta
+  "\e[33m", # 7 = orange (well, dark yellow)
+  "\e[37m", # 8 = grey
+]
+
+def colorize_chat(msg, player_info)
+  msg.sub(/\A@#(\d)/) do
+    player_id = $1.to_i
+    color = player_info.fetch(player_id).fetch(:color_number)
+    VT100_COLORS.fetch(color)
+  end + VT100_COLORS[0]
+end
 
 # Parse the arguments
 input_filenames = []
@@ -231,8 +250,8 @@ while true
 
   while !merged_chats.empty? && merged_chats.first.fetch(:time) <= time
     chat = merged_chats.shift
-    puts chat.fetch(:messageAGP)
-    output.write(format_merged_chat(chat))
+    puts colorize_chat(chat.fetch(:messageAGP), @player_info)
+    output.write(format_chat(chat))
   end
 
   if op[:operation] == :chat
@@ -240,10 +259,9 @@ while true
     if chat_should_be_merged?(chat)
       input.flush_recently_read
     else
-      puts chat.fetch(:messageAGP)
+      puts colorize_chat(chat.fetch(:messageAGP), @player_info)
     end
   end
 
   output.write(input.flush_recently_read)
 end
-
