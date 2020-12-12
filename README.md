@@ -1,7 +1,7 @@
 # Ruby code for AOE2DE replay
 
 This repository contains code for reading and manipulating recorded games
-from Age of Empires II: Definitive Edition
+from Age of Empires II: Definitive Edition.
 
 The code depends on Ruby, and nothing else.
 
