@@ -8,6 +8,18 @@ require 'stringio'
 require 'zlib'
 require 'digest/sha2'
 
+AOE2DE_MAP_NAMES = {
+  9 => 'Arabia',
+  29 => 'Arena',
+  67 => 'Budapest',
+  86 => 'Socotra',
+  # TODO: complete this list
+}
+
+def aoe2de_map_name(id)
+  AOE2DE_MAP_NAMES.fetch(id, id.to_s)
+end
+
 def aoe2rec_parse_de_string(io)
   separator, length = io.read(4).unpack('SS')
   raise if separator != 2656
