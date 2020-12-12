@@ -3,7 +3,7 @@
 # you get the chat and viewlock for all players in one file.
 #
 # Usage:
-# ./merge.rb OUTPUT INPUT1 INPUT2 ...
+# ./merge.rb INPUT1 INPUT2 ... -o OUTPUT
 
 # TODO: merge chat
 # TODO: merge flares (flare is an action!)
@@ -59,31 +59,45 @@ def format_merged_chat(info)
   [4, -1, json.size].pack('LlL') + json
 end
 
-filenames = ARGV.dup
+input_filenames = []
+output_filename = nil
+arg_enum = ARGV.each
+loop do
+  arg = arg_enum.next
+  if arg.start_with?('-')
+    if arg == '-o'
+      output_filename = arg_enum.next
+    else
+      raise "Unknown option: #{arg}"
+    end
+  else
+    input_filenames << arg
+  end
+end
 
-if filenames.size < 2
-  puts "Usage: ./merge.rb OUTPUT INPUT1 INPUT2 ..."
+if output_filename.nil? || input_filenames.size < 2
+  puts "Usage: ./merge.rb INPUT1 INPUT2 ... -o OUTPUT"
   exit 1
 end
 
-output_filename = filenames.shift
-input_filenames = filenames
-inputs = filenames.collect do |filename|
-  File.open(filename, 'rb')
-end
-
-# Parse the header of each input file.
-io_to_player_id = {}
-headers = []
-inputs.each do |io|
-  headers << header = aoe2rec_parse_header(io)
-  io_to_player_id[io] = header.fetch(:player_id)
+# Open each file and parse its header.
+inputs = []
+input_filenames.each do |filename|
+  io = File.open(filename, 'rb')
+  # io = File.open(filename, 'rb') { |f| StringIO.new f.read }
+  header = aoe2rec_parse_header(io)
+  inputs << {
+    filename: filename,
+    io: io,
+    header: header,
+    player_id: header.fetch(:player_id)
+  }
 end
 
 # Check the headers for consistency after masking out fields that we expect
 # to be inconsistent.
-consistent_headers = headers.collect do |header|
-  header.merge(player_id: nil)
+consistent_headers = inputs.collect do |input|
+  input[:header].merge(player_id: nil)
 end
 consistent_headers.each do |header|
   header[:dat_crc] = 0
@@ -102,21 +116,19 @@ end
 
 # Build a player info hash so we can get handy info from player IDs.
 @player_info = {}
-headers[0].fetch(:players).each do |pl|
+inputs[0][:header][:players].each do |pl|
   @player_info[pl.fetch(:player_id)] = {
     color_number: pl.fetch(:color_id) + 1,
-    name: pl.fetch(:name)
+    name: pl.fetch(:name),
+    input: inputs.find { |input| input[:player_id] == pl.fetch(:player_id) }
   }
-end
-inputs.each do |io|
-  @player_info[io_to_player_id[io]][:path] = io.path
 end
 
 puts "Players:"
 @player_info.each do |id, pi|
   puts "ID %d: %d %-20s %s" % [
     id, pi.fetch(:color_number), pi.fetch(:name),
-    pi.fetch(:path, 'No recorded game')
+    pi[:input]&.fetch(:filename) || 'No recorded game',
   ]
 end
 
@@ -128,9 +140,9 @@ while true
   data_remaining = false
   time_increment = nil
   # Read each input up to the next synchronization point or EOF.
-  inputs.each do |io|
+  inputs.each do |input|
     while true
-      op = aoe2rec_parse_operation(io)
+      op = aoe2rec_parse_operation(input[:io])
       #puts "PID#{io_to_player_id.fetch(io)}: #{op.inspect}"
       break if op.nil?  # Handle EOF
       data_remaining = true
@@ -148,7 +160,7 @@ while true
           chats << {
             time: time,
             from: json.fetch('player'),
-            to: io_to_player_id.fetch(io),
+            to: input.fetch(:player_id),
             channel: json.fetch('channel'),
             message: json.fetch('message'),
           }
@@ -162,12 +174,12 @@ while true
   time += time_increment if time_increment
 end
 
-inputs.each(&:close)
+inputs.each { |input| input.fetch(:io).close }
 
 # Merge the chat messages
 players_included = []
 @player_info.each do |id, pl|
-  if pl[:path]
+  if pl[:filename]
     players_included << "#{pl.fetch(:color_number)} #{pl.fetch(:name)}"
   end
 end
