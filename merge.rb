@@ -203,9 +203,9 @@ end
 inputs.each { |input| input.fetch(:io).close }
 
 # Print the mergable chats for debugging.
-chats.each do |chat|
-  puts "#{chat.fetch(:time)} #{chat[:player]}->#{chat[:to]}: " + colorize_chat(chat.fetch(:messageAGP), @player_info)
-end
+#chats.each do |chat|
+#  puts "#{chat.fetch(:time)} #{chat[:player]}->#{chat[:to]}: " + colorize_chat(chat.fetch(:messageAGP), @player_info)
+#end
 
 # Merge the chat messages
 players_included = []
