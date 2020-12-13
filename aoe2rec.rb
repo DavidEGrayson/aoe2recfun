@@ -227,18 +227,47 @@ end
 # :to - an array with just one element: the ID of the person who received
 #       the chat (possibly the same as the player)
 # :message - the message that was sent
+#
+# The array should already be sorted by time.
 def merge_chats_core(chats)
   merged_chats = []
-  last_chat = {}
   chats.each do |chat|
     player = chat.fetch(:player)
-    last = last_chat[player]
-    if !(last && last.fetch(:message) == chat.fetch(:message))
-      last = chat.dup
-      merged_chats << last
-      last_chat[player] = last
+    time = chat.fetch(:time)
+    raise ArgumentError if chat.fetch(:to).size != 1
+    to = chat.fetch(:to).fetch(0)
+
+    # Look backwards through our merged chats to see if this chat can be
+    # merged with one of them.
+    same_chat = nil
+    merged_chats.reverse_each do |candidate|
+
+      if candidate.fetch(:to).include?(to)
+        # We found another chat message from the same recording, so we should
+        # stop: or else we would be reordering the messages from that recording.
+        break
+      end
+
+      if candidate.fetch(:time) < time - 10_000
+        # We have gone more than 10 seconds back into the past and found
+        # nothing.  Stop now so we don't radically alter the timing of
+        # chat messages by accident.
+        break
+      end
+
+      if candidate.fetch(:player) == player &&
+        candidate.fetch(:message) == chat.fetch(:message)
+        same_chat = candidate
+        break
+      end
+    end
+
+    if same_chat
+      same_chat[:to] << to
     else
-      last_chat[player][:to].concat chat.fetch(:to)
+      chat = chat.dup
+      chat[:to] = chat.fetch(:to).dup
+      merged_chats << chat
     end
   end
   merged_chats
