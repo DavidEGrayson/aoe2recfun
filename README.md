@@ -14,8 +14,8 @@ To dump some info from a recorded game, run:
 
 ## Merging
 
-To merge together multiple replays from different players together
-so that you can see all the chats in one replay, run:
+To merge replays from different players together so that you can
+see all the chats in one replay, run:
 
     ./merge -o OUTPUT INPUT1 INPUT2 ...
 
