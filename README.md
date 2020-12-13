@@ -19,14 +19,15 @@ see all the chats in one replay, run:
 
     ./merge.rb -o OUTPUT INPUT1 INPUT2 ...
 
-The resulting recording will be a copy of the first input
-except for some chat messages being modified or added.
-Flares and view lock information in the first input are not touched.
+The resulting recording will be a copy of the first
+full-length input (which we call the main input) except for some
+chat messages being modified or added.
+Flares and view lock information of this main input are not touched.
 
-- To view flares, you have to select the perspective the user
-  who sent the flare or viewed the flare.
+- To view flares, you have to select the perspective of the user
+  who sent the flare or saw the flare.
 - The output file will only have view lock information from the
-  first input file (INPUT1).
+  main input.
 
 Warning: This command prints out the chat on the screen, so you
 might get spoiled about the results of the game!

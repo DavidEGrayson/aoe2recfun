@@ -121,7 +121,8 @@ input_filenames.each do |filename|
     filename: filename,
     io: io,
     header: header,
-    player_id: header.fetch(:player_id)
+    player_id: header.fetch(:player_id),
+    time: 0,
   }
 end
 
@@ -179,6 +180,7 @@ while true
       break if op.nil?  # Handle EOF
       data_remaining = true
       if op[:operation] == :sync
+        input[:time] += op.fetch(:time_increment)
         time_increment ||= op.fetch(:time_increment)
         if time_increment != op.fetch(:time_increment)
           raise "Inconsistent time increments!  Are all files really from the same game?"
@@ -232,12 +234,17 @@ merged_chats.each do |chat|
   update_chat_message_agp(chat)
 end
 
-input = InputWrapper.new(open_input_file(input_filenames.first))
-output = open_output_file(output_filename)
+# Select the main input: the first full-length recording.
+full_time = inputs.map { |input| input.fetch(:time) }.max
+main_input = inputs.first { |inputs| input.fetch(:time) == full_time }
+puts "Selected main input: #{main_input.fetch(:filename)}"
+puts
 
+# Copy from the main input to the output, while fixing the chat.
+input = InputWrapper.new(open_input_file(main_input.fetch(:filename)))
+output = open_output_file(output_filename)
 aoe2rec_parse_header(input)
 output.write(input.flush_recently_read)
-
 time = 0
 while true
   op = aoe2rec_parse_operation(input)
