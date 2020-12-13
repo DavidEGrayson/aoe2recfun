@@ -220,3 +220,26 @@ class InputWrapper
     rr
   end
 end
+
+# 'chats' should be an array of hashes that have at least the following keys:
+# :time - Game time in milliseconds
+# :player - the player ID of the person who sent the chat
+# :to - an array with just one element: the ID of the person who received
+#       the chat (possibly the same as the player)
+# :message - the message that was sent
+def merge_chats_core(chats)
+  merged_chats = []
+  last_chat = {}
+  chats.each do |chat|
+    player = chat.fetch(:player)
+    last = last_chat[player]
+    if !(last && last.fetch(:message) == chat.fetch(:message))
+      last = chat.dup
+      merged_chats << last
+      last_chat[player] = last
+    else
+      last_chat[player][:to].concat chat.fetch(:to)
+    end
+  end
+  merged_chats
+end

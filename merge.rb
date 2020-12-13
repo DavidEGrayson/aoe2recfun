@@ -202,6 +202,11 @@ end
 
 inputs.each { |input| input.fetch(:io).close }
 
+# Print the mergable chats for debugging.
+chats.each do |chat|
+  puts "#{chat.fetch(:time)} #{chat[:player]}->#{chat[:to]}: " + colorize_chat(chat.fetch(:messageAGP), @player_info)
+end
+
 # Merge the chat messages
 players_included = []
 @player_info.each do |id, pl|
@@ -217,18 +222,7 @@ end
 merged_chats = [
   { time: 200, player: 0, to: [], channel: 1, message: welcome },
 ]
-last_chat = {}
-chats.each do |chat|
-  player = chat.fetch(:player)
-  last = last_chat[player]
-  if !(last && last.fetch(:message) == chat.fetch(:message))
-    last = chat.dup
-    merged_chats << last
-    last_chat[player] = last
-  else
-    last_chat[player][:to].concat chat.fetch(:to)
-  end
-end
+merged_chats += merge_chats_core(chats)
 merged_chats.each do |chat|
   chat.fetch(:to).delete(chat.fetch(:player))
   update_chat_message_agp(chat)
