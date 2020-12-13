@@ -21,10 +21,12 @@ see all the chats in one replay, run:
 
 The resulting recording will be a copy of the first input
 except for some chat messages being modified or added.
+Flares and view lock information in the first input are not touched.
 
-Flares and view lock information are not merged (yet).
-So if you care about flares and view lock, the first input (INPUT1)
-should be recording with the information you wish to preserve.
+- To view flares, you have to select the perspective the user
+  who sent the flare or viewed the flare.
+- The output file will only have view lock information from the
+  first input file (INPUT1).
 
 Warning: This command prints out the chat on the screen, so you
 might get spoiled about the results of the game!
