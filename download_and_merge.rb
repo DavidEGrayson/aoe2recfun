@@ -66,13 +66,21 @@ output_dir = Pathname(ENV.fetch('AOE2RECFUN_OUTPUT_DIR'))
 output_file_relative = match_name + '.aoe2record'
 output_file = output_dir + output_file_relative
 
+# Make sure we are not overriding the final output.
+if output_file.exist?
+  $stderr.puts "The main output file already exists."
+  $stderr.puts "Please choose a different name or delete it by running:"
+  $stderr.puts "  rm #{output_file}"
+  exit 1
+end
+
 match_id = determine_match_id(match_id_str)
 
 puts "Name: #{match_name}"
 puts "Match ID: #{match_id}"
 puts
 
-match_url = 'https://aoe2.net/api/match?match_id=54920941'
+match_url = "https://aoe2.net/api/match?match_id=#{match_id}"
 
 puts "Fetching #{match_url} ..."
 match =  JSON.parse(Net::HTTP.get(URI(match_url)), symbolize_names: true)
@@ -140,5 +148,6 @@ end
 
 www = ENV['AOE2RECFUN_OUTPUT_WWW']
 if www
-  puts "Merged game available here: #{www} + #{output_file_relative}"
+  puts "Merged game available here:"
+  puts '  ' + (www + output_file_relative).to_s
 end

@@ -208,9 +208,9 @@ players_included = []
   end
 end
 if players_included.size == @player_info.size
-  welcome = "This replay contains chats from all players."
+  welcome = "This replay contains all chats."
 else
-  welcome = "This replay contains chats from/to " + players_included.join(', ') + "."
+  welcome = "This replay contains any chats from/to " + players_included.join(', ') + "."
 end
 merged_chats = [
   { time: 200, player: 0, to: [], channel: 1, message: welcome },
