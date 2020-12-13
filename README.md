@@ -17,7 +17,7 @@ To dump some info from a recorded game, run:
 To merge replays from different players together so that you can
 see all the chats in one replay, run:
 
-    ./merge -o OUTPUT INPUT1 INPUT2 ...
+    ./merge.rb -o OUTPUT INPUT1 INPUT2 ...
 
 The resulting recording will be a copy of the first input
 except for some chat messages being modified or added.
@@ -30,3 +30,7 @@ Flares and view lock information in the first input are not touched.
 
 Warning: This command prints out the chat on the screen, so you
 might get spoiled about the results of the game!
+
+There is also a command that automates the process of downloading
+a match using aoe2.net and aoe.ms, and then merges it.  For details,
+run `./download_and_merge.rb` with no arguments.
