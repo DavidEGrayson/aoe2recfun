@@ -14,13 +14,17 @@ def dump_header(header)
 end
 
 filenames = ARGV
+time = 0
 filenames.each do |filename|
   File.open(filename, 'rb') do |io|
     puts "#{filename}:"
     dump_header aoe2rec_parse_header(io)
     while (op = aoe2rec_parse_operation(io))
+      if op[:operation] == :sync
+        time += op.fetch(:time_increment)
+      end
       if op.fetch(:operation) == :chat
-        p op.fetch(:json)
+        puts "#{time}: " + op.fetch(:json)
       end
     end
   end
