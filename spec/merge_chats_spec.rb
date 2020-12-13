@@ -52,7 +52,7 @@ describe :merge_chats_core do
     ]
   end
 
-  it 'cannot handle more a complex pause conversations yet' do
+  it 'cannot handle more a complex pause conversations yet' do  # TODO
     chats = [
       { time: 1000, player: 2, to: [1], message: "you ok?" },
       { time: 1000, player: 1, to: [1], message: "yes" },
