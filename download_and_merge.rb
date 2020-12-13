@@ -145,6 +145,7 @@ if !$?.success?
   $stderr.puts "Merge failed."
   exit 1
 end 
+puts
 
 www = ENV['AOE2RECFUN_OUTPUT_WWW']
 if www
