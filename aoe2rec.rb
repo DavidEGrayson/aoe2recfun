@@ -12,7 +12,7 @@ AOE2DE_MAP_NAMES = {
   9 => 'Arabia',
   29 => 'Arena',
   67 => 'Budapest',
-  86 => 'Socotra',
+  87 => 'Socotra',
   # TODO: complete this list
 }
 
