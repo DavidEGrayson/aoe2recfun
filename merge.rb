@@ -19,10 +19,6 @@ def open_input_file(filename)
   File.open(filename, 'rb') { |f| StringIO.new f.read }
 end
 
-def open_output_file(filename)
-  File.open(filename, 'wb')
-end
-
 def chat_should_be_merged?(json)
   # Skip all-chat, since that will show up fine in every file.
   return false if json.fetch(:channel) == 1
@@ -236,7 +232,7 @@ puts
 
 # Copy from the main input to the output, while fixing the chat.
 input = InputWrapper.new(open_input_file(main_input.fetch(:filename)))
-output = open_output_file(output_filename)
+output = StringIO.new
 aoe2rec_parse_header(input)
 output.write(input.flush_recently_read)
 time = 0
@@ -266,3 +262,9 @@ while true
 
   output.write(input.flush_recently_read)
 end
+
+File.open(output_filename, 'rb') do |f|
+  f.write output.string
+end
+
+
