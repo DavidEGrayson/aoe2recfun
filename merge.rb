@@ -82,7 +82,7 @@ VT100_COLORS = [
 def colorize_chat(msg, player_info)
   msg.sub(/\A@#(\d)/) do
     player_id = $1.to_i
-    color = player_info.fetch(player_id).fetch(:color_number)
+    color = player_info.fetch(player_id).fetch(:color_number) rescue 0
     VT100_COLORS.fetch(color)
   end + VT100_COLORS[0]
 end
@@ -161,6 +161,13 @@ puts "Players:"
     id, pi.fetch(:color_number), pi.fetch(:name),
     pi[:input]&.fetch(:filename) || 'No recorded game',
   ]
+end
+puts
+
+# Print a summary of the inputs
+puts "Input replays:"
+inputs.each do |input|
+  puts "%s: player_id=%d" % [input.fetch(:filename), input.fetch(:player_id)]
 end
 puts
 
@@ -263,8 +270,6 @@ while true
   output.write(input.flush_recently_read)
 end
 
-File.open(output_filename, 'rb') do |f|
+File.open(output_filename, 'wb') do |f|
   f.write output.string
 end
-
-
