@@ -114,15 +114,22 @@ input_filenames = []
 
 match[:players].each do |pl|
   slug = "g#{match_id}_p#{pl.fetch(:profile_id)}"
-  input_filenames << "#{slug}.aoe2record"
   replay_url = "https://aoe.ms/replay/?gameId=#{match_id}&profileId=#{pl.fetch(:profile_id)}"
 
-  curl_command = "curl --output #{slug}.zip '#{replay_url}'"
+  curl_command = "curl -s --output #{slug}.zip '#{replay_url}'"
   puts "Running: #{curl_command}"
   system(curl_command)
   if !$?.success?
     $stderr.puts "Download failed."
     exit 1
+  end
+
+  if File.size("#{slug}.zip") < 100
+    # There are some games the aoe.ms just fails to put on their site.
+    # When this happens, it serves a tiny error message instead of a ZIP file.
+    $stderr.puts "WARNING: Download for #{pl.fetch(:name)} failed!"
+    $stderr.puts "Proceeding anyway, but manual intervention might be needed."
+    next
   end
 
   unzip_command = "unzip #{slug}.zip && mv AgeIIDE_Replay_*.aoe2record #{slug}.aoe2record"
@@ -132,6 +139,8 @@ match[:players].each do |pl|
     $stderr.puts "Unzip or rename failed."
     exit 1
   end
+
+  input_filenames << "#{slug}.aoe2record"
 end
 
 puts

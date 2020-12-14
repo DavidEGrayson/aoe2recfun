@@ -39,7 +39,7 @@ def aoe2rec_parse_player(io)
   r[:ai_type] = aoe2rec_parse_de_string(io)
   r[:ai_civ_name_index] = io.read(1).unpack1('C')
   r[:ai_name] = aoe2rec_parse_de_string(io)
-  r[:name] = aoe2rec_parse_de_string(io)
+  r[:name] = aoe2rec_parse_de_string(io).force_encoding('UTF-8')
 
   r[:type], r[:profile_id],
     r[:unknown1], r[:player_id],

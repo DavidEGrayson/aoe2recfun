@@ -250,7 +250,7 @@ while true
 
   while !merged_chats.empty? && merged_chats.first.fetch(:time) <= time
     chat = merged_chats.shift
-    puts colorize_chat(chat.fetch(:messageAGP), @player_info)
+    puts "%9d: %s" % [time, colorize_chat(chat.fetch(:messageAGP), @player_info)]
     output.write(format_chat(chat))
   end
 
@@ -260,7 +260,7 @@ while true
       input.flush_recently_read
     elsif chat[:messageAGP].empty?
     else
-      puts colorize_chat(chat.fetch(:messageAGP), @player_info)
+      puts "%9d: %s" % [time, colorize_chat(chat.fetch(:messageAGP), @player_info)]
     end
   end
 
