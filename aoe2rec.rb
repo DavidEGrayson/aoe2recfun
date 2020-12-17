@@ -41,7 +41,7 @@ def aoe2_pretty_chat(chat, players)
     text = msg.sub(/\A@#(\d)/) do
       player_id = $1.to_i
       player_info = players.find { |f| f.fetch(:player_id) == player_id }
-      color = player_info.fetch(:color_id) if player_info
+      color = player_info.fetch(:color_id) + 1 if player_info
       AOE2_VT100_COLORS.fetch(color)
     end + AOE2_VT100_COLORS[0]
   end
@@ -275,7 +275,7 @@ def merge_chats_core(chats)
         break
       end
 
-      if candidate.fetch(:time) < time - 10_000
+      if candidate.fetch(:time) < time - 20_000
         # We have gone more than 10 seconds back into the past and found
         # nothing.  Stop now so we don't radically alter the timing of
         # chat messages by accident.

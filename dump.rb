@@ -33,4 +33,6 @@ filenames.each do |filename|
       puts aoe2_pretty_chat(chat, header.fetch(:players))
     end
   end
+  puts
+  puts
 end
