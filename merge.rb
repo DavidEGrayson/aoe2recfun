@@ -114,7 +114,7 @@ end
 # Check the headers for consistency after masking out fields that we expect
 # to be inconsistent.
 consistent_headers = inputs.collect do |input|
-  input[:header].merge(player_id: nil)
+  input[:header].merge(player_id: nil, inflated_header: nil)
 end
 consistent_headers.each do |header|
   header[:dat_crc] = 0
