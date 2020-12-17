@@ -67,24 +67,13 @@ def format_chat(chat)
   [4, -1, json.size].pack('LlL') + json
 end
 
-VT100_COLORS = [
-  "\e[0m",  # 0 = normal
-  "\e[94m", # 1 = blue
-  "\e[91m", # 2 = red
-  "\e[92m", # 3 = green
-  "\e[93m", # 4 = yellow
-  "\e[96m", # 5 = cyan
-  "\e[95m", # 6 = magenta
-  "\e[33m", # 7 = orange (well, dark yellow)
-  "\e[37m", # 8 = grey
-]
-
+# TODO: use pretty_chat
 def colorize_chat(msg, player_info)
   msg.sub(/\A@#(\d)/) do
     player_id = $1.to_i
     color = player_info.fetch(player_id).fetch(:color_number) rescue 0
-    VT100_COLORS.fetch(color)
-  end + VT100_COLORS[0]
+    AOE2_VT100_COLORS.fetch(color)
+  end + AOE2_VT100_COLORS[0]
 end
 
 # Parse the arguments

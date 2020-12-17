@@ -55,7 +55,7 @@ def aoe2rec_parse_de_string(io)
 end
 
 def aoe2rec_parse_player(io)
-  r = {}
+  r = { offset: io.tell }
 
   r[:dlc_id], r[:color_id],
     r[:selected_color], r[:selected_team_id],
@@ -126,11 +126,13 @@ def aoe2rec_parse_de_header(io, save_version)
 end
 
 def aoe2rec_parse_compressed_header(header)
-  r = {}
+  r = { }
   io = StringIO.new(header)
   r[:check] = io.read(4).unpack1('V')
   inflater = Zlib::Inflate.new(-15)
-  io = StringIO.new(inflater.inflate(io.read))
+  inflated_header = inflater.inflate(io.read)
+  r[:inflated_header] = inflated_header
+  io = StringIO.new(inflated_header)
 
   game_version = ''.b
   while true
@@ -156,7 +158,6 @@ def aoe2rec_parse_compressed_header(header)
 end
 
 def aoe2rec_parse_header(io)
-  r = {}
   header_length = io.read(4).unpack1('V')
   header = io.read(header_length - 4)
 
@@ -164,7 +165,12 @@ def aoe2rec_parse_header(io)
 
   parts = io.read(32).unpack('VVVVVVVV')
   r[:log_version] = parts[0]
+  r[:unknown1] = parts[1]
+  r[:unknown2] = parts[2]
+  r[:unknown3] = parts[3]
   r[:player_id] = parts[4]
+  r[:unknown5] = parts[5]
+  r[:unknown6] = parts[6]
   r[:other_version] = parts[7]
 
   if r[:log_version] != 5
@@ -175,6 +181,27 @@ def aoe2rec_parse_header(io)
   end
 
   r
+end
+
+def aoe2rec_encode_header(header)
+  deflater = Zlib::Deflate.new(Zlib::DEFAULT_COMPRESSION, -15)
+  compressed_header = deflater.deflate(header.fetch(:inflated_header))
+  compressed_header << deflater.deflate(nil)
+  deflater.close
+  compressed_header = [header.fetch(:check)].pack('V') + compressed_header
+
+  parts = [
+    header.fetch(:log_version),
+    header.fetch(:unknown1),
+    header.fetch(:unknown2),
+    header.fetch(:unknown3),
+    header.fetch(:player_id),
+    header.fetch(:unknown5),
+    header.fetch(:unknown6),
+    header.fetch(:other_version),
+  ]
+
+  [compressed_header.bytesize + 4].pack('V') + compressed_header + parts.pack('VVVVVVVV')
 end
 
 def aoe2rec_parse_action(io)
