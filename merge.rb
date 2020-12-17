@@ -122,7 +122,7 @@ consistent_headers.each do |header|
     $stderr.puts "WARNING: These recorded games have inconsistent headers!"
     $stderr.puts "Are they really all from the same game?"
     header.keys.each do |key|
-      if header[key] != headers[0][key]
+      if header[key] != consistent_headers[0][key]
         $stderr.puts "(Field #{key} is one field that is inconsistent.)"
         break
       end
