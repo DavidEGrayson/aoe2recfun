@@ -12,13 +12,40 @@ AOE2DE_MAP_NAMES = {
   9 => 'Arabia',
   29 => 'Arena',
   67 => 'Budapest',
-  78 => 'Hambuger',
+  78 => 'Hamburger',
   87 => 'Socotra',
   # TODO: complete this list
 }
 
 def aoe2de_map_name(id)
   AOE2DE_MAP_NAMES.fetch(id, id.to_s)
+end
+
+AOE2_VT100_COLORS = [
+  "\e[0m",  # 0 = normal
+  "\e[94m", # 1 = blue
+  "\e[91m", # 2 = red
+  "\e[92m", # 3 = green
+  "\e[93m", # 4 = yellow
+  "\e[96m", # 5 = cyan
+  "\e[95m", # 6 = magenta
+  "\e[33m", # 7 = orange (well, dark yellow)
+  "\e[37m", # 8 = grey
+]
+
+def aoe2_pretty_chat(chat, players)
+  msg = chat.fetch(:messageAGP)
+  if msg.empty?
+    text = "[hidden] id%d: %s" % [chat.fetch(:player), chat.fetch(:message)]
+  else
+    text = msg.sub(/\A@#(\d)/) do
+      player_id = $1.to_i
+      player_info = players.find { |f| f.fetch(:player_id) == player_id }
+      color = player_info.fetch(:color_id) if player_info
+      AOE2_VT100_COLORS.fetch(color)
+    end + AOE2_VT100_COLORS[0]
+  end
+  "%9d: %s" % [chat.fetch(:time), text]
 end
 
 def aoe2rec_parse_de_string(io)
