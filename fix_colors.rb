@@ -16,6 +16,12 @@ def open_input_file(filename)
   File.open(filename, 'rb') { |f| StringIO.new f.read }
 end
 
+def set_player_color_id(header, player_index, color_id)
+  offset = header[:players][player_index].fetch(:offset) + 4
+  ch = header.fetch(:inflated_header)
+  ch[offset...(offset+4)] = [color_id].pack('l')
+end
+
 def set_player_selected_color(header, player_index, selected_color)
   offset = header[:players][player_index].fetch(:offset) + 8
   ch = header.fetch(:inflated_header)
@@ -71,8 +77,13 @@ input = open_input_file(input_filename)
 output = StringIO.new
 header = aoe2rec_parse_header(input)
 header[:players].size.times do |i|
+  # This doesn't seem to have any effect.
   set_player_selected_color(header, i, 255)
 end
+
+# This does change the number for the player: it will be 1 plus the ID given.
+set_player_color_id(header, 2, 3)
+
 output.write(aoe2rec_encode_header(header))
 output.write(input.read)
 
