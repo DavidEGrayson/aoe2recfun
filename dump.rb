@@ -33,6 +33,10 @@ filenames.each do |filename|
       puts aoe2_pretty_chat(chat, header.fetch(:players))
     end
   end
+  s = time / 1000
+  m, s = s.divmod(60)
+  h, m = m.divmod(60)
+  puts "Replay ends at %d:%02d:%02d" % [ h, m, s ]
   puts
   puts
 end
