@@ -11,7 +11,7 @@ require 'digest/sha2'
 AOE2DE_MAP_NAMES = {
   9 => 'Arabia',
   29 => 'Arena',
-  67 => 'Budapest',
+  68 => 'Budapest',
   78 => 'Hamburger',
   87 => 'Socotra',
   # TODO: complete this list
