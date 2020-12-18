@@ -1,8 +1,7 @@
 # Very basic library for parsing an AOE2DE recorded game.
-# References:
-# https://github.com/happyleavesaoc/aoc-mgz/blob/master/mgz/body/__init__.py
-# https://github.com/happyleavesaoc/aoc-mgz/blob/master/mgz/enums.py
-# https://github.com/happyleavesaoc/aoc-mgz/blob/master/mgz/header/de.py
+
+# Reference for the AOE2 replay file format:
+# https://github.com/happyleavesaoc/aoc-mgz
 
 require 'stringio'
 require 'zlib'
