@@ -6,6 +6,9 @@
 # ./merge.rb INPUT1 INPUT2 ... -o OUTPUT
 
 # TODO: fix this so it doesn't destroy chapters
+# TODO: (possibly related) Why does a merged replay with chapters stop
+# playing?  Are the chapters essential for the replay to work?
+
 # TODO: merge flares (flare is an action!)
 # TODO: merge view lock
 
@@ -127,6 +130,10 @@ input_filenames.each do |filename|
     force_id: header.fetch(:force_id),
     time: 0,
   }
+
+  if header.fetch(:next_chapter) != 0
+    raise "Merging games with chapters does not work yet; replay ends after 1st chapter."
+  end
 end
 
 # Check the headers for consistency after masking out fields that we expect

@@ -13,7 +13,7 @@ def dump_header(header)
   header[:players].each do |pl|
     puts "ID #{pl.fetch(:player_id)}, FID #{pl.fetch(:force_id)} = #{pl.fetch(:color_id)+1} #{pl.fetch(:name)}"
   end
-  puts "Recorded by FID #{header.fetch(:player_id)}"
+  puts "Recorded by FID #{header.fetch(:force_id)}"
 end
 
 filenames = ARGV
