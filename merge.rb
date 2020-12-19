@@ -5,6 +5,7 @@
 # Usage:
 # ./merge.rb INPUT1 INPUT2 ... -o OUTPUT
 
+# TODO: fix this so it doesn't destroy chapters
 # TODO: merge flares (flare is an action!)
 # TODO: merge view lock
 
@@ -33,6 +34,11 @@ def chat_should_be_merged?(json)
   true
 end
 
+def censor_chat(msg)
+  msg = msg.sub(/\bsimp\b/, '****')
+  msg
+end
+
 def update_chat_message_agp(chat, players)
   from = chat.fetch(:player)
   if from != 0
@@ -46,6 +52,7 @@ def update_chat_message_agp(chat, players)
   to_color_numbers = chat.fetch(:to).collect do |id|
     players.fetch(id - 1).fetch(:color_id) + 1
   end.uniq.sort
+  to_color_numbers.delete(from_color_num) if from_color_num
 
   # Note: I'm assuming that if one player controlling a force gets a message,
   # all of the players did.  If that's not the case, maybe we need some sort of
@@ -63,7 +70,7 @@ def update_chat_message_agp(chat, players)
     to_label = '<' + to_color_numbers.join(',') + '>'
   end
 
-  msg = chat.fetch(:message)
+  msg = censor_chat(chat.fetch(:message))
 
   chat[:messageAGP] = "#{color_code}#{to_label}#{from_label}#{msg}"
 end
@@ -117,7 +124,7 @@ input_filenames.each do |filename|
     filename: filename,
     io: io,
     header: header,
-    player_id: header.fetch(:player_id),
+    force_id: header.fetch(:force_id),
     time: 0,
   }
 end
@@ -125,7 +132,7 @@ end
 # Check the headers for consistency after masking out fields that we expect
 # to be inconsistent.
 consistent_headers = inputs.collect do |input|
-  input[:header].merge(player_id: nil, inflated_header: nil)
+  input[:header].merge(force_id: nil, inflated_header: nil, next_chapter: nil)
 end
 consistent_headers.each do |header|
   header[:dat_crc] = 0
@@ -147,18 +154,35 @@ header = inputs[0][:header]
 @player_info = {}
 header[:players].each do |pl|
   @player_info[pl.fetch(:player_id)] = {
+    player_id: pl.fetch(:player_id),
+    force_id: pl.fetch(:force_id),
     color_number: pl.fetch(:color_id) + 1,
     name: pl.fetch(:name),
-    input: inputs.find { |input| input[:player_id] == pl.fetch(:player_id) }
   }
 end
+
+# Match inputs to players.  This is made complicated by co-op games: I don't
+# know where to find the actual player ID, all we have is the force ID.
+# For each recording that has a force ID corresponding to a co-op team, I'll
+# just assign it to one of the players of that force that doesn't have an
+# input already.
+inputs.each do |input|
+  @player_info.each do |index, pl|
+    if input.fetch(:force_id) == pl.fetch(:force_id) && !pl[:input]
+      pl[:input] = input
+      input[:player_id] = pl.fetch(:player_id)
+      break
+    end
+  end
+end
+
 
 # Print a summary of the players
 puts "Map: #{aoe2de_map_name(header.fetch(:resolved_map_id))}"
 puts "Players:"
 @player_info.each do |id, pi|
-  puts "ID %d: %d %-20s %s" % [
-    id, pi.fetch(:color_number), pi.fetch(:name),
+  puts "ID %d, FID %d: %d %-20s %s" % [
+    id, pi.fetch(:force_id), pi.fetch(:color_number), pi.fetch(:name),
     pi[:input]&.fetch(:filename) || 'No recorded game',
   ]
 end
@@ -167,7 +191,7 @@ puts
 # Print a summary of the inputs
 puts "Input replays:"
 inputs.each do |input|
-  puts "%s: player_id=%d" % [input.fetch(:filename), input.fetch(:player_id)]
+  puts "%s: FID=%d" % [input.fetch(:filename), input.fetch(:force_id)]
 end
 puts
 
@@ -227,7 +251,6 @@ merged_chats = [
 ]
 merged_chats += merge_chats_core(chats)
 merged_chats.each do |chat|
-  chat.fetch(:to).delete(chat.fetch(:player))
   update_chat_message_agp(chat, header.fetch(:players))
 end
 
@@ -241,7 +264,13 @@ puts
 input = InputWrapper.new(open_input_file(main_input.fetch(:filename)))
 output = StringIO.new
 aoe2rec_parse_header(input)
-output.write(input.flush_recently_read)
+binary_header = input.flush_recently_read
+
+# Set the next chapter address to 0 since we don't have the code needed to
+# actually copy the chapter data to the output or update this address.
+binary_header[4, 4] = "\x00\x00\x00\x00".b
+
+output.write(binary_header)
 time = 0
 while true
   op = aoe2rec_parse_operation(input)
@@ -253,7 +282,7 @@ while true
 
   while !merged_chats.empty? && merged_chats.first.fetch(:time) <= time
     chat = merged_chats.shift
-    puts "%9d: %s" % [time, colorize_chat(chat.fetch(:messageAGP), @player_info)]
+    puts "%6d: %s" % [time/1000, colorize_chat(chat.fetch(:messageAGP), @player_info)]
     output.write(format_chat(chat))
   end
 
@@ -263,7 +292,7 @@ while true
       input.flush_recently_read
     elsif chat[:messageAGP].empty?
     else
-      puts "%9d: %s" % [time, colorize_chat(chat.fetch(:messageAGP), @player_info)]
+      puts "%6d: %s" % [time/1000, colorize_chat(chat.fetch(:messageAGP), @player_info)]
     end
   end
 

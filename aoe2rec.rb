@@ -49,7 +49,7 @@ def aoe2_pretty_chat(chat, players)
       end
     end + AOE2_VT100_COLORS[0]
   end
-  "%9d: %s" % [chat.fetch(:time), text]
+  "%6d: %s" % [chat.fetch(:time) / 1000, text]
 end
 
 def aoe2rec_parse_de_string(io)
@@ -137,7 +137,7 @@ end
 def aoe2rec_parse_compressed_header(header)
   r = { }
   io = StringIO.new(header)
-  r[:check] = io.read(4).unpack1('V')
+  r[:next_chapter] = io.read(4).unpack1('V')
   inflater = Zlib::Inflate.new(-15)
   inflated_header = inflater.inflate(io.read)
   r[:inflated_header] = inflated_header
@@ -177,7 +177,7 @@ def aoe2rec_parse_header(io)
   r[:unknown1] = parts[1]
   r[:unknown2] = parts[2]
   r[:unknown3] = parts[3]
-  r[:player_id] = parts[4]
+  r[:force_id] = parts[4]
   r[:unknown5] = parts[5]
   r[:unknown6] = parts[6]
   r[:other_version] = parts[7]
@@ -242,7 +242,7 @@ def aoe2rec_parse_viewlock(io)
     operation: :viewlock,
     x: parts[0],
     y: parts[1],
-    player_id: parts[2],
+    force_id: parts[2],
   }
 end
 
@@ -257,7 +257,14 @@ def aoe2rec_parse_operation(io)
   when 3 then aoe2rec_parse_viewlock(io)
   when 4 then aoe2rec_parse_chat(io)
   else
-    raise "Unknown operation: 0x%x" % operation_id
+    if operation_id > io.tell
+      # I think when someone drops, the game inserts a new header in this
+      # gap.  Possibly also when someone saves a chapter.
+      io.seek(operation_id)
+      { operation: :seek, offset: operation_id }
+    else
+      raise "Unknown operation: 0x%x" % operation_id
+    end
   end
 end
 
@@ -269,6 +276,14 @@ class InputWrapper
   def initialize(io)
     @io = io
     @recently_read = ''.b
+  end
+
+  def tell
+    @io.tell
+  end
+
+  def seek(n)
+    @io.seek(n)
   end
 
   def read(n)

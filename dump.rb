@@ -11,9 +11,9 @@ def dump_header(header)
   puts "Map: #{aoe2de_map_name(header.fetch(:resolved_map_id))}"
   puts "Players:"
   header[:players].each do |pl|
-    puts "ID #{pl.fetch(:player_id)} = #{pl.fetch(:color_id)+1} #{pl.fetch(:name)}"
+    puts "ID #{pl.fetch(:player_id)}, FID #{pl.fetch(:force_id)} = #{pl.fetch(:color_id)+1} #{pl.fetch(:name)}"
   end
-  puts "Recorded by player ID: #{header.fetch(:player_id)}"
+  puts "Recorded by FID #{header.fetch(:player_id)}"
 end
 
 filenames = ARGV
@@ -23,7 +23,9 @@ filenames.each do |filename|
   puts "#{filename}:"
   header = aoe2rec_parse_header(io)
   dump_header header
-  while (op = aoe2rec_parse_operation(io))
+  while true
+    op = aoe2rec_parse_operation(io)
+    break if !op
     if op[:operation] == :sync
       time += op.fetch(:time_increment)
     end
