@@ -37,7 +37,6 @@ filenames.each do |filename|
   m, s = s.divmod(60)
   h, m = m.divmod(60)
   puts "Replay ends at %d:%02d:%02d" % [ h, m, s ]
-  puts header[:inflated_header].include? [55911419].pack('L')
   puts
   puts
 end

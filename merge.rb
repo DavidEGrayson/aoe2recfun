@@ -33,28 +33,39 @@ def chat_should_be_merged?(json)
   true
 end
 
-def update_chat_message_agp(chat)
+def update_chat_message_agp(chat, players)
+  from = chat.fetch(:player)
+  if from != 0
+    color_code = '@#' + from.to_s
+    from_info = players.fetch(from - 1)
+    from_color_num = from_info.fetch(:color_id) + 1
+    from_name = from_info.fetch(:name)
+    from_label = "#{from_color_num} #{from_name}: "
+  end
+
   to_color_numbers = chat.fetch(:to).collect do |id|
-    @player_info.fetch(id).fetch(:color_number)
-  end.sort
-  if to_color_numbers.size == 0
-    to_label = ''
-  elsif to_color_numbers.size >= @player_info.size - 1
+    players.fetch(id - 1).fetch(:color_id) + 1
+  end.uniq.sort
+
+  # Note: I'm assuming that if one player controlling a force gets a message,
+  # all of the players did.  If that's not the case, maybe we need some sort of
+  # more complex notation to show who the messages are directed to.
+  to_all = players.all? do |pl|
+    to_color_num = pl.fetch(:color_id) + 1
+    to_color_num == from_color_num || to_color_numbers.include?(to_color_num)
+  end
+
+  if to_all
     to_label = '<All>'
+  elsif to_color_numbers.size == 0
+    to_label = ''
   else
     to_label = '<' + to_color_numbers.join(',') + '>'
   end
 
-  from = chat.fetch(:player)
-  if from != 0
-    color_code = '@#' + from.to_s
-    from_info = @player_info.fetch(from)
-    from_name = "#{from_info.fetch(:color_number)} #{from_info.fetch(:name)}: "
-  end
-
   msg = chat.fetch(:message)
 
-  chat[:messageAGP] = "#{color_code}#{to_label}#{from_name}#{msg}"
+  chat[:messageAGP] = "#{color_code}#{to_label}#{from_label}#{msg}"
 end
 
 def format_chat(chat)
@@ -217,7 +228,7 @@ merged_chats = [
 merged_chats += merge_chats_core(chats)
 merged_chats.each do |chat|
   chat.fetch(:to).delete(chat.fetch(:player))
-  update_chat_message_agp(chat)
+  update_chat_message_agp(chat, header.fetch(:players))
 end
 
 # Select the main input: the first full-length recording.

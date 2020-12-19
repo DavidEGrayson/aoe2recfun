@@ -39,9 +39,14 @@ def aoe2_pretty_chat(chat, players)
   else
     text = msg.sub(/\A@#(\d)/) do
       player_id = $1.to_i
-      player_info = players.find { |f| f.fetch(:player_id) == player_id }
-      color = player_info.fetch(:color_id) + 1 if player_info
-      AOE2_VT100_COLORS.fetch(color)
+      player_info = players[player_id - 1]
+      if player_info
+        color = player_info.fetch(:color_id) + 1
+        color = 0 if color > AOE2_VT100_COLORS.size
+        AOE2_VT100_COLORS.fetch(color)
+      else
+        "[id#{player_id}] "
+      end
     end + AOE2_VT100_COLORS[0]
   end
   "%9d: %s" % [chat.fetch(:time), text]
@@ -53,8 +58,13 @@ def aoe2rec_parse_de_string(io)
   io.read(length)
 end
 
-def aoe2rec_parse_player(io)
-  r = { offset: io.tell }
+# In the returned hash:
+# player_id is the 1-based index of this player in the array.
+# force_id tells us which set of units the player controls.
+#   For non-coop games, force_id seems to equal player_id.
+#   For co-op games, you can have two players controlling the same force.
+def aoe2rec_parse_player(io, player_id)
+  r = { offset: io.tell, player_id: player_id }
 
   r[:dlc_id], r[:color_id],
     r[:selected_color], r[:selected_team_id],
@@ -68,7 +78,7 @@ def aoe2rec_parse_player(io)
   r[:name] = aoe2rec_parse_de_string(io).force_encoding('UTF-8')
 
   r[:type], r[:profile_id],
-    r[:unknown1], r[:player_id],
+    r[:unknown1], r[:force_id],
     r[:hd_rm_elo], r[:hd_dm_elo],
     r[:animated_destruction_enabled], r[:custom_ai] =
     io.read(6*4 + 2).unpack('LLLLLLCC')
@@ -114,8 +124,8 @@ def aoe2rec_parse_de_header(io, save_version)
 
   raise if separator4 != 155555
 
-  r[:players] = 8.times.collect { aoe2rec_parse_player(io) }
-  r[:players].reject! { |pl| pl[:player_id] == 0xFFFFFFFF }
+  r[:players] = (1..8).collect { |id| aoe2rec_parse_player(io, id) }
+  r[:players].reject! { |pl| pl[:force_id] == 0xFFFFFFFF }
 
   # p io.read(100) # tmphax
 
