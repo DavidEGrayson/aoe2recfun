@@ -28,8 +28,8 @@ AOE2_VT100_COLORS = [
   "\e[93m", # 4 = yellow
   "\e[96m", # 5 = cyan
   "\e[95m", # 6 = magenta
-  "\e[33m", # 7 = orange (well, dark yellow)
-  "\e[37m", # 8 = grey
+  "\e[37m", # 7 = gray
+  "\e[33m", # 8 = orange (well, dark yellow)
 ]
 
 def aoe2_pretty_chat(chat, players)
