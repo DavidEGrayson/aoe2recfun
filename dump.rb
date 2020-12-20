@@ -16,6 +16,7 @@ def dump_header(header)
   puts "Recorded by FID #{header.fetch(:force_id)}"
 end
 
+total_time = 0
 filenames = ARGV
 filenames.each do |filename|
   time = 0
@@ -35,10 +36,12 @@ filenames.each do |filename|
       puts aoe2_pretty_chat(chat, header.fetch(:players))
     end
   end
-  s = time / 1000
-  m, s = s.divmod(60)
-  h, m = m.divmod(60)
-  puts "Replay ends at %d:%02d:%02d" % [ h, m, s ]
+  puts "Replay ends at #{aoe2_pretty_time(time)}"
   puts
   puts
+  total_time += time
+end
+
+if filenames.size > 1
+  puts "Total time for all #{filenames.size} replays: #{aoe2_pretty_time(total_time)}"
 end

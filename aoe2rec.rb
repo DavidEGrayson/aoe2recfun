@@ -32,6 +32,13 @@ AOE2_VT100_COLORS = [
   "\e[33m", # 8 = orange (well, dark yellow)
 ]
 
+def aoe2_pretty_time(time_ms)
+  s = time_ms / 1000
+  m, s = s.divmod(60)
+  h, m = m.divmod(60)
+  "%d:%02d:%02d" % [ h, m, s ]
+end
+
 def aoe2_pretty_chat(chat, players)
   msg = chat.fetch(:messageAGP)
   if msg.empty?
