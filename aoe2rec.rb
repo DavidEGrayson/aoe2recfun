@@ -42,7 +42,7 @@ end
 def aoe2_pretty_chat(chat, players)
   msg = chat.fetch(:messageAGP)
   if msg.empty?
-    text = "[hidden] id%d: %s" % [chat.fetch(:player), chat.fetch(:message)]
+    text = "[hidden] id%d: %s" % [chat.fetch(:player), chat.fetch(:message).force_encoding('UTF-8')]
   else
     text = msg.sub(/\A@#(\d)/) do
       player_id = $1.to_i
@@ -56,7 +56,7 @@ def aoe2_pretty_chat(chat, players)
       end
     end + AOE2_VT100_COLORS[0]
   end
-  "%6d: %s" % [chat.fetch(:time) / 1000, text]
+  "%7s: %s" % [aoe2_pretty_time(chat.fetch(:time)), text]
 end
 
 def aoe2rec_parse_de_string(io)
@@ -89,6 +89,8 @@ def aoe2rec_parse_player(io, player_id)
     r[:hd_rm_elo], r[:hd_dm_elo],
     r[:animated_destruction_enabled], r[:custom_ai] =
     io.read(6*4 + 2).unpack('LLLLLLCC')
+
+  r[:maybe_handicap] = io.read(8)
 
   r
 end
@@ -126,6 +128,8 @@ def aoe2rec_parse_de_header(io, save_version)
   if save_version >= 13.34
     unknown1, unknown2 = io.read(8).unpack('LL')
   end
+
+  r[:maybe_handicap] = io.read(1)
 
   separator4 = io.read(4).unpack1('L')
 
