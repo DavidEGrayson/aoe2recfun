@@ -76,6 +76,8 @@ def update_chat_message_agp(chat, players)
   msg = censor_chat(chat.fetch(:message))
 
   chat[:messageAGP] = "#{color_code}#{to_label}#{from_label}#{msg}"
+
+  chat[:message] = "#{to_label + ' ' unless to_all}#{msg}"
 end
 
 def format_chat(chat)
