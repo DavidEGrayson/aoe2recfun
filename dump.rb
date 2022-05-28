@@ -10,8 +10,11 @@ $stdout.sync = true
 def dump_header(header)
   puts "Map: #{aoe2de_map_name(header.fetch(:resolved_map_id))}"
   puts "Players:"
-  header[:players].each do |pl|
-    puts "ID #{pl.fetch(:player_id)}, FID #{pl.fetch(:force_id)} = #{pl.fetch(:color_id)+1} #{pl.fetch(:name)}"
+  header[:players].each do |pi|
+    puts "%d %-30s ID %d, FID %d, PR %d" % [
+      pi.fetch(:color_id) + 1, pi.fetch(:name),
+      pi.fetch(:player_id), pi.fetch(:force_id), pi.fetch(:profile_id),
+    ]
   end
   puts "Recorded by FID #{header.fetch(:force_id)}"
 end

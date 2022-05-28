@@ -30,6 +30,14 @@ def set_player_name(header, player, name)
   change_de_string(header, player.fetch(:name_offset), name)
 end
 
+def change_u32(header, offset, value)
+  header.fetch(:inflated_header)[offset, 4] = [value].pack('L')
+end
+
+def set_profile_id(header, player, id)
+  change_u32(header, player.fetch(:profile_id_offset), id)
+end
+
 # Parse the arguments
 input_filenames = []
 output_filename = nil
@@ -58,10 +66,11 @@ input = open_input_file(input_filename)
 header = aoe2rec_parse_header(input)
 
 header[:players].reverse_each do |pi|
-  #puts "ID %d: %d %-20s" % [
-  #  pi.fetch(:player_id), pi.fetch(:color_id) + 1, pi.fetch(:name),
+  #puts "%d %-20s profile=%d" % [
+  #  pi.fetch(:color_id) + 1, pi.fetch(:name), pi.fetch(:profile_id)
   #]
 
+  set_profile_id(header, pi, 0)
   set_player_name(header, pi, "P" + (pi.fetch(:color_id) + 1).to_s)
 end
 puts
