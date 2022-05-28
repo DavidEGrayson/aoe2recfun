@@ -81,11 +81,16 @@ def aoe2rec_parse_player(io, player_id, save_version)
 
   r[:ai_type] = aoe2rec_parse_de_string(io)
   r[:ai_civ_name_index] = io.read(1).unpack1('C')
+
+  r[:ai_name_offset] = io.tell
   r[:ai_name] = aoe2rec_parse_de_string(io)
+
   r[:name_offset] = io.tell
   r[:name] = aoe2rec_parse_de_string(io).force_encoding('UTF-8')
 
+  r[:type_offset] = io.tell
   r[:type] = io.read(4).unpack1('L')
+
   r[:profile_id_offset] = io.tell
   r[:profile_id] = io.read(4).unpack1('L')
   r[:unknown1] = io.read(4).unpack1('L')

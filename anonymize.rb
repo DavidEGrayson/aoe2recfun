@@ -15,6 +15,9 @@ def open_input_file(filename)
   File.open(filename, 'rb') { |f| StringIO.new f.read }
 end
 
+# TODO: any modifications to inflated_header that could change the size should
+# be stored in an array and applied later in reverse order by offset.
+
 def change_de_string(header, offset, value)
   h = header.fetch(:inflated_header)
   value = value.dup.force_encoding('BINARY')
@@ -25,17 +28,25 @@ def change_de_string(header, offset, value)
   h[offset, 4 + length] = [separator, value.size].pack('SS') + value
 end
 
-def set_player_name(header, player, name)
-  player[:name] = name
-  change_de_string(header, player.fetch(:name_offset), name)
-end
-
 def change_u32(header, offset, value)
   header.fetch(:inflated_header)[offset, 4] = [value].pack('L')
 end
 
+def set_player_ai_name(header, player, name)
+  player[:name] = ""
+  change_de_string(header, player.fetch(:name_offset), "")
+  player[:ai_name] = name
+  change_de_string(header, player.fetch(:ai_name_offset), name)
+end
+
 def set_profile_id(header, player, id)
+  player[:profile_id] = id
   change_u32(header, player.fetch(:profile_id_offset), id)
+end
+
+def set_player_type(header, player, id)
+  player[:type] = id
+  change_u32(header, player.fetch(:type_offset), id)
 end
 
 # Parse the arguments
@@ -71,7 +82,8 @@ header[:players].reverse_each do |pi|
   #]
 
   set_profile_id(header, pi, 0)
-  set_player_name(header, pi, "P" + (pi.fetch(:color_id) + 1).to_s)
+  set_player_type(header, pi, 4)  # change player type to computer
+  set_player_ai_name(header, pi, "P" + (pi.fetch(:color_id) + 1).to_s)
 end
 puts
 

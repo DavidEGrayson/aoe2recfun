@@ -11,10 +11,11 @@ def dump_header(header)
   puts "Map: #{aoe2de_map_name(header.fetch(:resolved_map_id))}"
   puts "Players:"
   header[:players].each do |pi|
-    puts "%d %-30s ID %d, FID %d, PR %d" % [
-      pi.fetch(:color_id) + 1, pi.fetch(:name),
-      pi.fetch(:player_id), pi.fetch(:force_id), pi.fetch(:profile_id),
+    puts "%d %-30s ID %d, FID %d, T %d, PR %d" % [
+      pi.fetch(:color_id) + 1, pi.fetch(:name) + pi.fetch(:ai_name),
+      pi.fetch(:player_id), pi.fetch(:force_id), pi.fetch(:type), pi.fetch(:profile_id),
     ]
+    puts
   end
   puts "Recorded by FID #{header.fetch(:force_id)}"
 end
