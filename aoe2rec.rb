@@ -229,17 +229,17 @@ end
 
 def aoe2rec_encode_header(header)
   deflater = Zlib::Deflate.new(Zlib::DEFAULT_COMPRESSION, -15)
-  compressed_header = deflater.deflate(header.fetch(:inflated_header))
+  compressed_header = [header.fetch(:next_chapter)].pack('V')
+  compressed_header << deflater.deflate(header.fetch(:inflated_header))
   compressed_header << deflater.deflate(nil)
   deflater.close
-  compressed_header = [header.fetch(:check)].pack('V') + compressed_header
 
   parts = [
     header.fetch(:log_version),
     header.fetch(:unknown1),
     header.fetch(:unknown2),
     header.fetch(:unknown3),
-    header.fetch(:player_id),
+    header.fetch(:force_id),
     header.fetch(:unknown5),
     header.fetch(:unknown6),
     header.fetch(:other_version),
