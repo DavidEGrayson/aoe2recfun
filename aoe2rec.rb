@@ -84,14 +84,21 @@ def aoe2rec_parse_player(io, player_id, save_version)
   r[:ai_name] = aoe2rec_parse_de_string(io)
   r[:name] = aoe2rec_parse_de_string(io).force_encoding('UTF-8')
 
-  r[:type], r[:profile_id],
-    r[:unknown1], r[:force_id],
-    r[:hd_rm_elo], r[:hd_dm_elo],
-    r[:animated_destruction_enabled], r[:custom_ai] =
-    io.read(6*4 + 2).unpack('LLLLLLCC')
+  r[:type] = io.read(4).unpack('L')
+  r[:profile_id] = io.read(4).unpack('L')
+  r[:unknown1] = io.read(4).unpack('L')
+  r[:force_id] = io.read(4).unpack('L')
+
+  if save_version < 25.22
+    r[:hd_rm_elo] = io.read(4).unpack('L')
+    r[:hd_dm_elo] = io.read(4).unpack('L')
+  end
+
+  r[:prefer_random] = io.read(1).unpack('C')
+  r[:custom_ai] = io.read(1).unpack('C')
 
   if save_version >= 25.06
-    r[:maybe_handicap] = io.read(8)
+    r[:handicap] = io.read(8)
   end
 
   r
@@ -99,35 +106,35 @@ end
 
 def aoe2rec_parse_de_header(io, save_version)
   r = {}
+
+  if save_version >= 25.22
+    r[:build] = io.read(4).unpack('L')
+  end
+  if save_version >= 26.16
+    r[:timestamp] = io.read(4).unpack('L')
+  end
+
   r[:version], r[:interval_version], r[:game_options_version], dlc_count =
     io.read(16).unpack('FLLL')
 
   r[:dlc_ids] = io.read(dlc_count * 4).unpack('L*')
 
-  if save_version >= 25.22
-    meat = io.read(19*4).unpack('LLLLLLLLLLLLLLLLLLL')
-    raise if meat.last != 155555
-    r[:meat1] = meat
-  else
-    meat = io.read(19*4).unpack('LLLLLLLLLLLLFLLLLLL')
-    r[:dataset_ref], r[:difficulty_id],
-      r[:selected_map_id], r[:resolved_map_id],
-      r[:reveal_map], r[:victory_type_id],
-      r[:starting_resources_id], r[:starting_age_id],
-      r[:ending_age_id], r[:game_type],
-      separator1, separator2,
-      r[:speed], r[:treaty_length],
-      r[:population_limit], r[:num_players],
-      r[:unused_player_color], r[:victory_amount],
-      separator3 = meat
-    p meat
-    raise if separator1 != 155555
-    raise if separator2 != 155555
-    raise if separator3 != 155555
-  end
+  meat = io.read(19*4).unpack('LLLLLLLLLLLLFLLLLLL')
+  r[:dataset_ref], r[:difficulty_id],
+    r[:selected_map_id], r[:resolved_map_id],
+    r[:reveal_map], r[:victory_type_id],
+    r[:starting_resources_id], r[:starting_age_id],
+    r[:ending_age_id], r[:game_type],
+    separator1, separator2,
+    r[:speed], r[:treaty_length],
+    r[:population_limit], r[:num_players],
+    r[:unused_player_color], r[:victory_amount],
+    separator3 = meat
+  raise if separator1 != 155555
+  raise if separator2 != 155555
+  raise if separator3 != 155555
 
   meat = io.read(15).unpack('C' * 15)
-  p meat
   r[:trade_enabled],
     r[:team_bonus_disabled], r[:random_positions],
     r[:all_techs], r[:num_starting_units],
@@ -139,11 +146,11 @@ def aoe2rec_parse_de_header(io, save_version)
     meat
 
   if save_version >= 13.34
-    unknown1, unknown2 = io.read(8).unpack('LL')
+    r[:sub_game_mode], r[:battle_royale_time] = io.read(8).unpack('LL')
   end
 
   if save_version >= 25.06
-    r[:maybe_handicap] = io.read(1)
+    r[:handicap] = io.read(1)
   end
 
   separator4 = io.read(4).unpack1('L')
@@ -152,8 +159,6 @@ def aoe2rec_parse_de_header(io, save_version)
 
   r[:players] = (1..8).collect { |id| aoe2rec_parse_player(io, id, save_version) }
   r[:players].reject! { |pl| pl[:force_id] == 0xFFFFFFFF }
-
-  # p io.read(100) # tmphax
 
   # NOTE: There is other stuff in the DE header that we have not parsed.
 
