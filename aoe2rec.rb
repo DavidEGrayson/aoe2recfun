@@ -70,7 +70,7 @@ end
 # force_id tells us which set of units the player controls.
 #   For non-coop games, force_id seems to equal player_id.
 #   For co-op games, you can have two players controlling the same force.
-def aoe2rec_parse_player(io, player_id)
+def aoe2rec_parse_player(io, player_id, save_version)
   r = { offset: io.tell, player_id: player_id }
 
   r[:dlc_id], r[:color_id],
@@ -90,7 +90,9 @@ def aoe2rec_parse_player(io, player_id)
     r[:animated_destruction_enabled], r[:custom_ai] =
     io.read(6*4 + 2).unpack('LLLLLLCC')
 
-  r[:maybe_handicap] = io.read(8)
+  if save_version >= 25.06
+    r[:maybe_handicap] = io.read(8)
+  end
 
   r
 end
@@ -102,16 +104,31 @@ def aoe2rec_parse_de_header(io, save_version)
 
   r[:dlc_ids] = io.read(dlc_count * 4).unpack('L*')
 
-  r[:dataset_ref], r[:difficulty],
-    r[:selected_map_id], r[:resolved_map_id],
-    r[:reveal_map], r[:victory_type_id],
-    r[:starting_resources_id], r[:starting_age_id],
-    r[:ending_age_id], r[:game_type],
-    separator1, separator2,
-    r[:speed], r[:treaty_length],
-    r[:population_limit], r[:num_players],
-    r[:unused_player_color], r[:victory_amount],
-    separator3, r[:trade_enabled],
+  if save_version >= 25.22
+    meat = io.read(19*4).unpack('LLLLLLLLLLLLLLLLLLL')
+    raise if meat.last != 155555
+    r[:meat1] = meat
+  else
+    meat = io.read(19*4).unpack('LLLLLLLLLLLLFLLLLLL')
+    r[:dataset_ref], r[:difficulty_id],
+      r[:selected_map_id], r[:resolved_map_id],
+      r[:reveal_map], r[:victory_type_id],
+      r[:starting_resources_id], r[:starting_age_id],
+      r[:ending_age_id], r[:game_type],
+      separator1, separator2,
+      r[:speed], r[:treaty_length],
+      r[:population_limit], r[:num_players],
+      r[:unused_player_color], r[:victory_amount],
+      separator3 = meat
+    p meat
+    raise if separator1 != 155555
+    raise if separator2 != 155555
+    raise if separator3 != 155555
+  end
+
+  meat = io.read(15).unpack('C' * 15)
+  p meat
+  r[:trade_enabled],
     r[:team_bonus_disabled], r[:random_positions],
     r[:all_techs], r[:num_starting_units],
     r[:lock_teams], r[:lock_speed],
@@ -119,23 +136,21 @@ def aoe2rec_parse_de_header(io, save_version)
     r[:record_game], r[:animals_enabled],
     r[:predators_enabled], r[:turbo_enabled],
     r[:shared_exploration], r[:team_positions] =
-    io.read(19*4 + 15).unpack('LLLLLLLLLLLLFLLLLLLCCCCCCCCCCCCCCC')
-
-  raise if separator1 != 155555
-  raise if separator2 != 155555
-  raise if separator3 != 155555
+    meat
 
   if save_version >= 13.34
     unknown1, unknown2 = io.read(8).unpack('LL')
   end
 
-  r[:maybe_handicap] = io.read(1)
+  if save_version >= 25.06
+    r[:maybe_handicap] = io.read(1)
+  end
 
   separator4 = io.read(4).unpack1('L')
 
   raise if separator4 != 155555
 
-  r[:players] = (1..8).collect { |id| aoe2rec_parse_player(io, id) }
+  r[:players] = (1..8).collect { |id| aoe2rec_parse_player(io, id, save_version) }
   r[:players].reject! { |pl| pl[:force_id] == 0xFFFFFFFF }
 
   # p io.read(100) # tmphax
@@ -179,6 +194,9 @@ end
 
 def aoe2rec_parse_header(io)
   header_length = io.read(4).unpack1('V')
+  if header_length > 1_000_000
+    raise "header_length: #{header_length}"
+  end
   header = io.read(header_length - 4)
 
   r = aoe2rec_parse_compressed_header(header)
