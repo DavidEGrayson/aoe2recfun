@@ -15,9 +15,6 @@ def open_input_file(filename)
   File.open(filename, 'rb') { |f| StringIO.new f.read }
 end
 
-# TODO: any modifications to inflated_header that could change the size should
-# be stored in an array and applied later in reverse order by offset.
-
 def change_de_string(header, offset, value)
   h = header.fetch(:inflated_header)
   value = value.dup.force_encoding('BINARY')
@@ -32,11 +29,36 @@ def change_u32(header, offset, value)
   header.fetch(:inflated_header)[offset, 4] = [value].pack('L')
 end
 
-def set_player_ai_name(header, player, name)
-  player[:name] = ""
-  change_de_string(header, player.fetch(:name_offset), "")
-  player[:ai_name] = name
-  change_de_string(header, player.fetch(:ai_name_offset), name)
+def set_player_ai_name(header, player, ai_name)
+  ai_name = ai_name.dup.force_encoding('BINARY')
+
+  ih = header[:inflated_header]
+  orig_inflated_header_size = ih.size
+  orig_name = player[:name]
+  orig_ai_name = player[:ai_name]
+  orig_total_name_size = orig_name.size + orig_ai_name.size
+
+  ai_name = ai_name[0, orig_total_name_size]
+  name = "\x00" * (orig_total_name_size - ai_name.size)
+
+  player[:name] = name
+  change_de_string(header, player.fetch(:name_offset), name)
+  player[:ai_name] = ai_name
+  change_de_string(header, player.fetch(:ai_name_offset), ai_name)
+
+  search = [orig_name.size + 1].pack('S') + orig_name + "\x00"
+  index = ih.index(search)
+  if !index
+    raise "Cannot find second instance of player name in header."
+  end
+  ih[index + 2, orig_name.size] = name.ljust(orig_name.size, "\x00")[0, orig_name.size]
+  if ih.include?(search)
+    raise "Name found more than once in the header."
+  end
+
+  if orig_inflated_header_size != header[:inflated_header].size
+    raise "Accidentally changed header size"
+  end
 end
 
 def set_profile_id(header, player, id)

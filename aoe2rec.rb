@@ -60,8 +60,8 @@ def aoe2_pretty_chat(chat, players)
 end
 
 def aoe2rec_parse_de_string(io)
-  separator, length = io.read(4).unpack('SS')
-  raise if separator != 2656
+  raise if io.read(2) != "`\n"
+  length = io.read(2).unpack1('S')
   io.read(length)
 end
 
@@ -93,7 +93,7 @@ def aoe2rec_parse_player(io, player_id, save_version)
 
   r[:profile_id_offset] = io.tell
   r[:profile_id] = io.read(4).unpack1('L')
-  r[:unknown1] = io.read(4).unpack1('L')
+  r[:unknown8] = io.read(4).unpack1('L')
   r[:force_id] = io.read(4).unpack1('L')
 
   if save_version < 25.22
@@ -167,7 +167,70 @@ def aoe2rec_parse_de_header(io, save_version)
   r[:players] = (1..8).collect { |id| aoe2rec_parse_player(io, id, save_version) }
   r[:players].reject! { |pl| pl[:force_id] == 0xFFFFFFFF }
 
-  # NOTE: There is other stuff in the DE header that we have not parsed.
+  io.read(9)
+  r[:fog_of_war] = io.read(1).unpack1('C')
+  r[:cheat_notifications] = io.read(1).unpack1('C')
+  r[:colored_chat] = io.read(1).unpack1('C')
+
+  separator5 = io.read(4).unpack1('L')
+  raise if separator5 != 155555
+
+  r[:ranked] = io.read(1).unpack1('C')
+  r[:allow_specs] = io.read(1).unpack1('C')
+  r[:lobby_visibility] = io.read(4).unpack1('L')
+  r[:hidden_civs] = io.read(1).unpack1('C')
+  r[:matchmacking] = io.read(1).unpack1('C')
+  r[:spec_delay] = io.read(4).unpack1('L')
+
+  if save_version >= 13.13
+    r[:scenario_civ] = io.read(1).unpack1('C')
+    r[:rms_crc] = io.read(4).unpack('L')
+  end
+
+  r[:unknown_strings] = 23.times.collect do
+    string = aoe2rec_parse_de_string(io)
+    nums = []
+    while true
+      n = io.read(4).unpack1('L')
+      break if ![3, 21, 23, 42, 44, 45, 46, 47].include?(n)
+      nums << n
+    end
+  end
+
+  r[:unknown7] = io.read(16)  # all zeroes
+  r[:guid] = io.read(16)
+  r[:lobby_name] = aoe2rec_parse_de_string(io)
+
+  if save_version >= 25.22
+    r[:unknown10] = io.read(8)
+  end
+  r[:modded_dataset] = aoe2rec_parse_de_string(io)
+  r[:unknown11] = io.read(19)
+  r[:unknown12] = io.read(5) if save_version >= 13.13
+  r[:unknown13] = io.read(9) if save_version >= 13.17
+  r[:unknown14] = io.read(1) if save_version >= 20.06
+  r[:unknown15] = io.read(8) if save_version >= 20.16
+  r[:unknown16] = io.read(21) if save_version >= 25.06
+  r[:unknown17] = io.read(4) if save_version >= 25.22
+  r[:unknown18] = io.read(8) if save_version >= 26.16
+  r[:unknown19] = aoe2rec_parse_de_string(io)
+  r[:unknown20] = io.read(5)
+  r[:unknown21] = io.read(1) if save_version >= 13.13
+  if save_version >= 13.17
+    r[:unknown22] = io.read(2)
+  else
+    r[:unknown23] = aoe2rec_parse_de_string(io)
+    r[:unknown24] = io.read(4)
+    r[:unknown25] = io.read(4)
+  end
+
+  # remainder = io.read
+  # puts "#{remainder.size} bytes remaining"
+  # index = remainder.index('Elavid')
+  # if index
+  #   puts "Remainder includes Elavid at index #{index}"
+  #   exit(1)
+  # end
 
   r
 end
