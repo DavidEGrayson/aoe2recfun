@@ -80,16 +80,6 @@ def update_chat_message_agp(chat, players)
   chat[:message] = "#{to_label + ' ' unless to_all}#{msg}"
 end
 
-def format_chat(chat)
-  json = JSON.dump(
-    player: chat.fetch(:player),
-    channel: chat.fetch(:channel),
-    message: chat.fetch(:message),
-    messageAGP: chat.fetch(:messageAGP),
-  ).b
-  [4, -1, json.size].pack('LlL') + json
-end
-
 # TODO: use pretty_chat
 def colorize_chat(msg, player_info)
   msg.sub(/\A@#(\d)/) do
@@ -292,7 +282,7 @@ while true
   while !merged_chats.empty? && merged_chats.first.fetch(:time) <= time
     chat = merged_chats.shift
     puts "%6d: %s" % [time/1000, colorize_chat(chat.fetch(:messageAGP), @player_info)]
-    output.write(format_chat(chat))
+    output.write(aoe2rec_encode_chat(chat))
   end
 
   if op[:operation] == :chat

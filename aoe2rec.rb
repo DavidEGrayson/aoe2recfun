@@ -250,10 +250,10 @@ def aoe2rec_parse_compressed_header(header)
     break if c == "\0"
     game_version << c
   end
-  r[:game_version] = game_version
-  if r[:game_version] != "VER 9.4"
-    raise "Expected game_version to be 'VER 9.4', got #{r[:game_version]}."
+  if game_version != "VER 9.4"
+    raise "Expected game_version to be 'VER 9.4', got #{game_version}."
   end
+  r[:game_version] = game_version
 
   r[:save_version] = io.read(4).unpack1('F').round(2)
   if r[:save_version] < 12.97
@@ -298,7 +298,8 @@ end
 
 def aoe2rec_encode_header(header)
   deflater = Zlib::Deflate.new(Zlib::DEFAULT_COMPRESSION, -15)
-  compressed_header = [header.fetch(:next_chapter)].pack('V')
+  # just set next_chapter to 0 since we don't know the right address yet
+  compressed_header = "\x00\x00\x00\x00"
   compressed_header << deflater.deflate(header.fetch(:inflated_header))
   compressed_header << deflater.deflate(nil)
   deflater.close
@@ -372,6 +373,15 @@ def aoe2rec_parse_operation(io)
   end
 end
 
+def aoe2rec_encode_chat(chat)
+  json = JSON.dump(
+    player: chat.fetch(:player),
+    channel: chat.fetch(:channel),
+    message: chat.fetch(:message),
+    messageAGP: chat.fetch(:messageAGP),
+  ).b
+  [4, -1, json.size].pack('LlL') + json
+end
 
 # Acts as a normal file object except it intercepts calls to read and stores
 # the results in a buffer.  This makes it possible to duplicate a file as we
