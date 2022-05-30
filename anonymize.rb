@@ -11,23 +11,6 @@ require_relative 'aoe2rec'
 
 $stdout.sync = true
 
-def anonymize_chat(chat, name_map)
-  chat = chat.dup
-  name_map.each do |old_name, new_name|
-    chat[:message] = chat[:message].gsub(old_name, new_name)
-    chat[:messageAGP] = chat[:messageAGP].gsub(old_name, new_name)
-  end
-  chat
-end
-
-def binary_string_pad(str, size)
-  str.ljust(size, "\x00")[0, size]
-end
-
-def open_input_file(filename)
-  File.open(filename, 'rb') { |f| StringIO.new f.read }
-end
-
 def change_de_string(header, offset, value)
   h = header.fetch(:inflated_header)
   value = value.dup.force_encoding('BINARY')
@@ -35,54 +18,70 @@ def change_de_string(header, offset, value)
   separator, length = h[offset, 4].unpack('SS') + [value]
   raise if separator != 2656
 
-  h[offset, 4 + length] = [separator, value.size].pack('SS') + value
+  header[:inflated_header_patches] << [
+    offset, 4 + length, [separator, value.size].pack('SS') + value
+  ]
 end
 
 def change_u32(header, offset, value)
   header.fetch(:inflated_header)[offset, 4] = [value].pack('L')
 end
 
-# TODO: don't go through so much effort to preserve the header size, because
-# the size gets messed up when we compress it with zlib anyway.
-def set_player_ai_name(header, player, ai_name)
-  ai_name = ai_name.dup.force_encoding('BINARY')
+def set_player_name(header, player, name)
+  name = name.dup.force_encoding('BINARY')
+  orig_name = player.fetch(:name)
 
-  ih = header[:inflated_header]
-  orig_inflated_header_size = ih.size
-  orig_name = player[:name]
-  orig_total_name_size = orig_name.size + player[:ai_name].size
+  # Set the profile ID in the DE header to 0 so DE doesn't have any way to
+  # look up the player's name.
+  player[:profile_id] = 0
+  change_u32(header, player.fetch(:profile_id_offset), 0)
 
-  ai_name = ai_name[0, orig_total_name_size]
-  name = "\x00" * (orig_total_name_size - ai_name.size)
+  # Set the player type to computer (4) in the DE header so it shows the
+  # "ai name" in the replay header.  (This is how I get it to print any name
+  # at all.)
+  player[:type] = 4
+  change_u32(header, player.fetch(:type_offset), 4)
 
-  player[:name] = name
-  change_de_string(header, player.fetch(:name_offset), name)
-  player[:ai_name] = ai_name
-  change_de_string(header, player.fetch(:ai_name_offset), ai_name)
+  # Set the "name" field in the DE header to empty.  It doesn't seem to be used
+  # for anything.
+  player[:name] = ""
+  change_de_string(header, player.fetch(:name_offset), "")
 
+  # Set the "ai_name" to the desired name.  It is shown in the Replays tab.
+  player[:ai_name] = name
+  change_de_string(header, player.fetch(:ai_name_offset), name)
+
+  # Change the other copy of the name in the header, which is shown while the
+  # replay is playing.  It's hard to know where it appears so we will just
+  # search for it and make sure we find it exactly once.
   search = [orig_name.size + 1].pack('S') + orig_name + "\x00"
-  index = ih.index(search)
+  index = header[:inflated_header].index(search)
   if !index
     raise "Cannot find second instance of player name in header."
   end
-  ih[index + 2, orig_name.size] = binary_string_pad(ai_name, orig_name.size)
-  if ih.include?(search)
+  if header[:inflated_header].index(search, index + 1)
     raise "Name found more than once in the header."
   end
+  header[:inflated_header_patches] << [
+    index, search.size,
+    [name.size + 1].pack('S') + name + "\x00"
+  ]
+end
 
-  if orig_inflated_header_size != header[:inflated_header].size
-    raise "Accidentally changed header size"
+def change_names_in_chat!(chat, name_map)
+  name_map.each do |old_name, new_name|
+    chat[:message] = chat[:message].gsub(old_name, new_name)
+    chat[:messageAGP] = chat[:messageAGP].gsub(old_name, new_name)
   end
 end
 
-def set_profile_id(header, player, id)
-  player[:profile_id] = id
-  change_u32(header, player.fetch(:profile_id_offset), id)
-end
-
-def set_player_type(header, player, id)
-  player[:type] = id
-  change_u32(header, player.fetch(:type_offset), id)
+def apply_patches(str, patches)
+  str = str.dup
+  patches = patches.sort_by { |pt| pt[0] }
+  patches.reverse_each do |index, offset, replacement|
+    str[index, offset] = replacement
+  end
+  str
 end
 
 # Parse the arguments
@@ -109,43 +108,36 @@ end
 input_filename = input_filenames.fetch(0)
 
 # Open input and parse its header.
-input = InputWrapper.new(open_input_file(input_filename))
+input = File.open(input_filename, 'rb') { |f| InputWrapper.new StringIO.new f.read }
 header = aoe2rec_parse_header(input)
 
+header[:inflated_header_patches] = []
 name_map = {}
-header[:players].reverse_each do |pi|
+header[:players].each do |pi|
   new_name = "P" + (pi.fetch(:color_id) + 1).to_s
   name_map[pi.fetch(:name)] = new_name
 
   #puts "%d %-20s profile=%d" % [
   #  pi.fetch(:color_id) + 1, pi.fetch(:name), pi.fetch(:profile_id)
   #]
-
-  set_profile_id(header, pi, 0)
-  set_player_type(header, pi, 4)  # change player type to computer
-  set_player_ai_name(header, pi, new_name)
+  set_player_name(header, pi, new_name)
 end
-puts
+apply_patches(header[:inflated_header], header.delete(:inflated_header_patches))
 
 output = StringIO.new
 output.write(aoe2rec_encode_header(header))
 
-time = 0
 input.flush_recently_read
+
 while true
   op = aoe2rec_parse_operation(input)
   break if op.nil?
 
-  if op[:operation] == :sync
-    time += op.fetch(:time_increment)
-  end
-
   if op[:operation] == :chat
-    input.flush_recently_read
     chat = JSON.parse(op.fetch(:json), symbolize_names: true)
-    chat[:time] = time
-    anon_chat = anonymize_chat(chat, name_map)
-    output.write(aoe2rec_encode_chat(anon_chat))
+    change_names_in_chat!(chat, name_map)
+    output.write(aoe2rec_encode_chat(chat))
+    input.flush_recently_read
   else
     output.write(input.flush_recently_read)
   end
