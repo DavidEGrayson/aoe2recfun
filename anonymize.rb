@@ -84,6 +84,48 @@ def apply_patches(str, patches)
   str
 end
 
+def anonymize(input_filename, output_filename)
+  # Open input and parse its header.
+  input = File.open(input_filename, 'rb') { |f| InputWrapper.new StringIO.new f.read }
+  header = aoe2rec_parse_header(input)
+
+  header[:inflated_header_patches] = []
+  name_map = {}
+  header[:players].each do |pi|
+    new_name = "P" + (pi.fetch(:color_id) + 1).to_s
+    name_map[pi.fetch(:name)] = new_name
+
+    #puts "%d %-20s profile=%d" % [
+    #  pi.fetch(:color_id) + 1, pi.fetch(:name), pi.fetch(:profile_id)
+    #]
+    set_player_name(header, pi, new_name)
+  end
+  apply_patches(header[:inflated_header], header.delete(:inflated_header_patches))
+
+  output = StringIO.new
+  output.write(aoe2rec_encode_header(header))
+
+  input.flush_recently_read
+
+  while true
+    op = aoe2rec_parse_operation(input)
+    break if op.nil?
+
+    if op[:operation] == :chat
+      chat = JSON.parse(op.fetch(:json), symbolize_names: true)
+      change_names_in_chat!(chat, name_map)
+      output.write(aoe2rec_encode_chat(chat))
+      input.flush_recently_read
+    else
+      output.write(input.flush_recently_read)
+    end
+  end
+
+  File.open(output_filename, 'wb') do |f|
+    f.write output.string
+  end
+end
+
 # Parse the arguments
 input_filenames = []
 output_filename = nil
@@ -107,42 +149,4 @@ end
 
 input_filename = input_filenames.fetch(0)
 
-# Open input and parse its header.
-input = File.open(input_filename, 'rb') { |f| InputWrapper.new StringIO.new f.read }
-header = aoe2rec_parse_header(input)
-
-header[:inflated_header_patches] = []
-name_map = {}
-header[:players].each do |pi|
-  new_name = "P" + (pi.fetch(:color_id) + 1).to_s
-  name_map[pi.fetch(:name)] = new_name
-
-  #puts "%d %-20s profile=%d" % [
-  #  pi.fetch(:color_id) + 1, pi.fetch(:name), pi.fetch(:profile_id)
-  #]
-  set_player_name(header, pi, new_name)
-end
-apply_patches(header[:inflated_header], header.delete(:inflated_header_patches))
-
-output = StringIO.new
-output.write(aoe2rec_encode_header(header))
-
-input.flush_recently_read
-
-while true
-  op = aoe2rec_parse_operation(input)
-  break if op.nil?
-
-  if op[:operation] == :chat
-    chat = JSON.parse(op.fetch(:json), symbolize_names: true)
-    change_names_in_chat!(chat, name_map)
-    output.write(aoe2rec_encode_chat(chat))
-    input.flush_recently_read
-  else
-    output.write(input.flush_recently_read)
-  end
-end
-
-File.open(output_filename, 'wb') do |f|
-  f.write output.string
-end
+anonymize(input_filename, output_filename)
