@@ -437,7 +437,6 @@ def aoe2rec_parse_operation(io)
       io.seek(operation_id)
       { operation: :seek, offset: operation_id }
     else
-      puts io.read(50).hex_inspect
       raise "Unknown operation 0x%x at offset %d." % [operation_id, io.tell]
     end
   end

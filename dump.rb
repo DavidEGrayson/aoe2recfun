@@ -6,6 +6,7 @@ require_relative 'aoe2rec'
 $stdout.sync = true
 
 def dump_header(header)
+  puts "File format version: #{header.fetch(:save_version)}"
   puts "Map: #{aoe2de_map_name(header.fetch(:resolved_map_id))}"
   puts "Players:"
   header[:players].each do |pi|
@@ -17,12 +18,12 @@ def dump_header(header)
   puts "Recorded by FID #{header.fetch(:force_id)}"
 end
 
-total_time = 0
-filenames = ARGV
-filenames.each do |filename|
+def dump_file(filename)
   time = 0
-  io = File.open(filename, 'rb') { |f| StringIO.new f.read }
+  contents = File.open(filename, 'rb') { |f| f.read }
+  io = StringIO.new(contents)
   puts "#{filename}:"
+  puts "Size: #{contents.size}"
   header = aoe2rec_parse_header(io)
   dump_header header
   while true
@@ -40,9 +41,23 @@ filenames.each do |filename|
   puts "Replay ends at #{aoe2_pretty_time(time)}"
   puts
   puts
-  total_time += time
+  $total_time += time
+end
+
+$total_time = 0
+filenames = ARGV
+filenames.each do |filename|
+  begin
+    dump_file(filename)
+  rescue StandardError => e
+    puts "Error while dumping #{filename}:"
+    puts "#{e}"
+    puts e.backtrace
+    puts
+    puts
+  end
 end
 
 if filenames.size > 1
-  puts "Total time for all #{filenames.size} replays: #{aoe2_pretty_time(total_time)}"
+  puts "Total time for all #{filenames.size} replays: #{aoe2_pretty_time($total_time)}"
 end
