@@ -18,6 +18,7 @@ AOE2DE_MAP_NAMES = {
   9 => 'Arabia',
   10 => 'Archipelago',
   11 => 'Baltic',
+  12 => 'Black Forest',
   13 => 'Coastal',
   14 => 'Continental',
   15 => 'Crater Lake',
@@ -135,6 +136,10 @@ AOE2DE_MAP_NAMES = {
   154 => 'Michi',
   155 => 'Team Moats',
   156 => 'Volcanic Island',
+  169 => 'Enclosed',
+  170 => 'Haboob',
+  172 => 'Land Madness',
+  175 => 'Morass',
 }
 
 def aoe2de_map_name(id)
