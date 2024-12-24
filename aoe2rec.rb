@@ -357,9 +357,10 @@ def aoe2rec_parse_de_header(io, save_version)
     nums = []
     while true
       n = io.read(4).unpack1('L')
-      break if ![3, 21, 23, 42, 44, 45, 46, 47].include?(n)
       nums << n
+      break if ![3, 21, 23, 42, 44, 45, 46, 47].include?(n)
     end
+    [string, nums]
   end
 
   r[:unknown7] = io.read(16)  # all zeroes
