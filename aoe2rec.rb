@@ -8,6 +8,12 @@ require 'zlib'
 require 'digest/sha2'
 require 'json'
 
+class String
+  def hex_inspect
+    '"' + each_byte.map { |b| '\x%02x' % b }.join + '"'
+  end
+end
+
 AOE2DE_MAP_NAMES = {
   9 => 'Arabia',
   29 => 'Arena',
@@ -80,6 +86,13 @@ def aoe2rec_parse_player(io, player_id, save_version)
     r[:mp_game_version], r[:civ_id] =
     io.read(2*4 + 3 + 8 + 5).unpack('LlCCCa8CL')
 
+  if save_version >= 61.5
+    custom_civ_count = io.read(4).unpack1('L')
+    custom_civ_ids = (0...custom_civ_count).map do
+      io.read(4).unpack1('L')
+    end
+  end
+
   r[:ai_type] = aoe2rec_parse_de_string(io)
   r[:ai_civ_name_index] = io.read(1).unpack1('C')
 
@@ -127,7 +140,7 @@ def aoe2rec_parse_de_header(io, save_version)
 
   r[:dlc_ids] = io.read(dlc_count * 4).unpack('L*')
 
-  meat = io.read(19*4).unpack('LLLLLLLLLLLLFLLLLLL')
+  meat = io.read(18*4).unpack('LLLLLLLLLLLLFLLLLL')
   r[:dataset_ref], r[:difficulty_id],
     r[:selected_map_id], r[:resolved_map_id],
     r[:reveal_map], r[:victory_type_id],
@@ -136,10 +149,13 @@ def aoe2rec_parse_de_header(io, save_version)
     separator1, separator2,
     r[:speed], r[:treaty_length],
     r[:population_limit], r[:num_players],
-    r[:unused_player_color], r[:victory_amount],
-    separator3 = meat
+    r[:unused_player_color], r[:victory_amount] = meat
   raise if separator1 != 155555
   raise if separator2 != 155555
+
+  r[:unk_byte1] = io.read(1) if save_version >= 61.3
+
+  separator3 = io.read(4).unpack1('L')
   raise if separator3 != 155555
 
   meat = io.read(15).unpack('C' * 15)
@@ -161,17 +177,46 @@ def aoe2rec_parse_de_header(io, save_version)
     r[:handicap] = io.read(1)
   end
 
+  r[:unk_byte2] = io.read(1) if save_version >= 50
+
   separator4 = io.read(4).unpack1('L')
 
   raise if separator4 != 155555
 
-  r[:players] = (1..8).collect { |id| aoe2rec_parse_player(io, id, save_version) }
+  player_array_count = save_version >= 37 ? r[:num_players] : 8
+  raise if player_array_count > 8
+
+  r[:players] = (1..player_array_count).collect do |id|
+    aoe2rec_parse_player(io, id, save_version)
+  end
   r[:players].reject! { |pl| pl[:force_id] == 0xFFFFFFFF }
 
-  io.read(9)
+  r[:unk_bytes9] = io.read(9)
   r[:fog_of_war] = io.read(1).unpack1('C')
   r[:cheat_notifications] = io.read(1).unpack1('C')
   r[:colored_chat] = io.read(1).unpack1('C')
+
+  if save_version >= 37
+    empty_slot_count = 8 - r[:num_players]
+    r[:empty_slots] = (0...empty_slot_count).map do
+      slot = {}
+      if save_version >= 61.5
+        slot[:unk] = io.read(4).unpack1('L')
+      end
+      slot[:i0x] = io.read(4).unpack1('L')
+      slot[:i0a] = io.read(4).unpack1('L')
+      slot[:i0b] = io.read(4).unpack1('L')
+      slot[:s1] = aoe2rec_parse_de_string(io)
+      slot[:a2] = io.read(1)
+      slot[:s2] = aoe2rec_parse_de_string(io)
+      slot[:s3] = aoe2rec_parse_de_string(io)
+      slot[:a3] = io.read(22)
+      slot[:i1] = io.read(4).unpack1('L')
+      slot[:i2] = io.read(4).unpack1('L')
+      slot[:a4] = io.read(8)
+      slot
+    end
+  end
 
   separator5 = io.read(4).unpack1('L')
   raise if separator5 != 155555
@@ -214,6 +259,10 @@ def aoe2rec_parse_de_header(io, save_version)
   r[:unknown16] = io.read(21) if save_version >= 25.06
   r[:unknown17] = io.read(4) if save_version >= 25.22
   r[:unknown18] = io.read(8) if save_version >= 26.16
+  r[:unknown18_1] = io.read(3) if save_version >= 37
+  r[:unknown18_2] = io.read(8) if save_version >= 50
+  r[:unknown18_3] = io.read(1) if save_version >= 61.5
+  r[:unknown18_4] = io.read(5) if save_version >= 63
   r[:unknown19] = aoe2rec_parse_de_string(io)
   r[:unknown20] = io.read(5)
   r[:unknown21] = io.read(1) if save_version >= 13.13
@@ -256,9 +305,17 @@ def aoe2rec_parse_compressed_header(header)
   end
   r[:game_version] = game_version
 
-  r[:save_version] = io.read(4).unpack1('F').round(2)
+  save_version = io.read(4).unpack1('F').round(2)
+  if save_version == -1.0
+    save_version = io.read(4).unpack1('V')
+    if save_version != 37
+      save_version = (save_version.to_f / (1 << 16)).round(2)
+    end
+  end
+  r[:save_version] = save_version
+
   if r[:save_version] < 12.97
-    raise "Expected save_version to be at least 12.97, got #{r[:save_version]}."
+    $stderr.puts "Warning: expected save_version to be at least 12.97, got #{r[:save_version]}."
   end
 
   r.merge! aoe2rec_parse_de_header(io, r[:save_version])
@@ -352,6 +409,16 @@ def aoe2rec_parse_viewlock(io)
   }
 end
 
+# Dunno what this is
+def aoe2rec_parse_op6(io)
+  r = { operation: 6 }
+  r[:i0], r[:i1], r[:i2], r[:i3], r[:i4], r[:i5] = io.read(4*5).unpack('LLLLLL')
+  r[:i6] = io.read(2).unpack('S')
+  r[:i7], r[:i8], r[:i9], r[:i10] = io.read(4*4).unpack('LLLL')
+  r[:maybe_checksum] = io.read(8)
+  r
+end
+
 def aoe2rec_parse_operation(io)
   r = io.read(4)
   return if r.nil?  # end of file
@@ -362,6 +429,7 @@ def aoe2rec_parse_operation(io)
   when 2 then aoe2rec_parse_sync(io)
   when 3 then aoe2rec_parse_viewlock(io)
   when 4 then aoe2rec_parse_chat(io)
+  when 6 then aoe2rec_parse_op6(io)
   else
     if operation_id > io.tell
       # I think when someone drops, the game inserts a new header in this
@@ -369,7 +437,8 @@ def aoe2rec_parse_operation(io)
       io.seek(operation_id)
       { operation: :seek, offset: operation_id }
     else
-      raise "Unknown operation: 0x%x" % operation_id
+      puts io.read(50).hex_inspect
+      raise "Unknown operation 0x%x at offset %d." % [operation_id, io.tell]
     end
   end
 end
