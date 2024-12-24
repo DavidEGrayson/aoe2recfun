@@ -12,7 +12,6 @@
 # TODO: merge flares (flare is an action!)
 # TODO: merge view lock
 
-require 'json'
 require_relative 'aoe2rec'
 
 $stdout.sync = true

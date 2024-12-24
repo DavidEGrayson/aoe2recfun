@@ -6,6 +6,7 @@
 require 'stringio'
 require 'zlib'
 require 'digest/sha2'
+require 'json'
 
 AOE2DE_MAP_NAMES = {
   9 => 'Arabia',

@@ -2,8 +2,6 @@
 # Utility for dumping data from AOE2 recorded games.
 
 require_relative 'aoe2rec'
-require 'json'
-require 'stringio'
 
 $stdout.sync = true
 

@@ -4,9 +4,8 @@
 # in a recording by changing their names to P1, P2, etc.
 #
 # Usage:
-# ./anonymize.rb INPUT -o OUTPUT
+# ./anonymize.rb INPUT1 INPUT2 INPUT3... -o OUTPUT
 
-require 'json'
 require_relative 'aoe2rec'
 
 $stdout.sync = true
