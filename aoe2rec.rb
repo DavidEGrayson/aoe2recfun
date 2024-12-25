@@ -14,6 +14,11 @@ class String
   end
 end
 
+LEADERBOARD_NAMES = {
+  3 => '1v1 RM',
+  4 => 'Team RM',
+}
+
 AOE2DE_MAP_NAMES = {
   9 => 'Arabia',
   10 => 'Archipelago',
@@ -439,7 +444,7 @@ end
 
 def aoe2rec_parse_header(io)
   header_length = io.read(4).unpack1('V')
-  if header_length > 1_000_000
+  if header_length > 2_000_000
     raise "header_length: #{header_length}"
   end
   header = io.read(header_length - 4)
@@ -541,13 +546,13 @@ def aoe2rec_parse_postgame(io)
   version = bytes[-12, 4].unpack1('L')
   raise "Unexpected postgame version: #{version}" if version != 1
 
-  num_blocks = bytes[-16, 4].unpack1('L')
-  raise if num_blocks > 8  # this is supposed to be a small number
+  block_count = bytes[-16, 4].unpack1('L')
+  raise "Postgame block_count unexpectedly large" if block_count > 8
 
   r = { operation: :postgame }
 
   offset = bytes.size - 16
-  num_blocks.times do
+  block_count.times do
     offset -= 8
     raise if offset < 0
     block_size, block_id = bytes[offset, 8].unpack('LL')
@@ -558,10 +563,30 @@ def aoe2rec_parse_postgame(io)
     if block_id == 1  # world time
       raise if block_size != 4
       r[:world_time] = block.unpack1('L')
+    elsif block_id == 2  # leaderboards
+      bio = StringIO.new(block)
+      leaderboard_count = bio.read(4).unpack1('L')
+      r[:leaderboards] = leaderboard_count.times.collect do
+        lb = {}
+        lb[:id], lb[:unknown] = bio.read(4+2).unpack('LS')
+        player_count = bio.read(4).unpack1('L')
+        lb[:players] = player_count.times.collect do
+          player = {}
+          id_minus_1, player[:rank], player[:rating] = \
+            bio.read(3*4).unpack('lll')
+          player[:id] = id_minus_1 + 1
+          player
+        end
+        lb
+      end
     else
       # Block we don't understand yet
       r[block_id] = block
     end
+  end
+
+  if offset != 0
+    raise "Unaccounted-for data in postgame block (#{offset} bytes)."
   end
 
   r

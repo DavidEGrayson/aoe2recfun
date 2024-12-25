@@ -10,7 +10,7 @@ def dump_header(header)
   puts "Map: #{aoe2de_map_name(header.fetch(:resolved_map_id))}"
   puts "Players:"
   header[:players].each do |pi|
-    puts "%d %-30s ID %d, FID %d, T %d, PR %d" % [
+    puts "  %d %-30s ID %d, FID %d, T %d, PR %d" % [
       pi.fetch(:color_id) + 1, (pi.fetch(:name) + pi.fetch(:ai_name)).strip,
       pi.fetch(:player_id), pi.fetch(:force_id), pi.fetch(:type), pi.fetch(:profile_id),
     ]
@@ -37,8 +37,34 @@ def dump_file(filename)
       chat[:time] = time
       puts aoe2_pretty_chat(chat, header.fetch(:players))
     end
+    if op.fetch(:operation) == :postgame
+      game_finish_time = time
+      puts "#{aoe2_pretty_time(time)}: game finished"
+      if op.key?(:world_time)
+        world_time = op.fetch(:world_time)
+        if world_time != time
+          puts "World time mismatch: " \
+            "expected #{aoe2_pretty_time(time)} (#{time}), " \
+            "got #{aoe2_pretty_time(world_time)} (#{world_time})"
+        end
+      end
+      if op.key?(:leaderboards)
+        op[:leaderboards].each do |board|
+          id = board.fetch(:id)
+          name = LEADERBOARD_NAMES.fetch(id, "Leaderboard #{id}")
+          puts "#{name}"
+          board.fetch(:players).each do |player|
+            puts "  %d #%-6d %5d" % [
+              player.fetch(:id), player.fetch(:rank), player.fetch(:rating)
+            ]
+          end
+        end
+      end
+    end
   end
-  puts "Replay ends at #{aoe2_pretty_time(time)}"
+  if time != game_finish_time
+    puts "#{aoe2_pretty_time(time)}: replay finished"
+  end
   puts
   puts
   $total_time += time
@@ -55,6 +81,7 @@ filenames.each do |filename|
     puts e.backtrace
     puts
     puts
+    #exit(1)
   end
 end
 
