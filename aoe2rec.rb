@@ -394,14 +394,6 @@ def aoe2rec_parse_de_header(io, save_version)
     r[:unknown25] = io.read(4)
   end
 
-  # remainder = io.read
-  # puts "#{remainder.size} bytes remaining"
-  # index = remainder.index('Elavid')
-  # if index
-  #   puts "Remainder includes Elavid at index #{index}"
-  #   exit(1)
-  # end
-
   r
 end
 
@@ -529,13 +521,49 @@ def aoe2rec_parse_viewlock(io)
   }
 end
 
-# Dunno what this is
-def aoe2rec_parse_op6(io)
-  r = { operation: 6 }
-  r[:i0], r[:i1], r[:i2], r[:i3], r[:i4], r[:i5] = io.read(4*5).unpack('LLLLLL')
-  r[:i6] = io.read(2).unpack('S')
-  r[:i7], r[:i8], r[:i9], r[:i10] = io.read(4*4).unpack('LLLL')
-  r[:maybe_checksum] = io.read(8)
+# This is an insane data structure where you have to read it backwards.
+# The end of it appears to be marked by an 8-byte constant.
+def aoe2rec_parse_postgame(io)
+  if false
+    data = io.read
+    if data.size < 1000
+      puts ("Length 0x%x: " % data.size) + data.hex_inspect
+    end
+    return { operation: :postgame, data: data }
+  end
+
+  ending = "\xce\xa4\x59\xb1\x05\xdb\x7b\x43".b
+  bytes = ''.b
+  while bytes[-8,8] != ending
+    bytes += io.read(4)
+  end
+
+  version = bytes[-12, 4].unpack1('L')
+  raise "Unexpected postgame version: #{version}" if version != 1
+
+  num_blocks = bytes[-16, 4].unpack1('L')
+  raise if num_blocks > 8  # this is supposed to be a small number
+
+  r = { operation: :postgame }
+
+  offset = bytes.size - 16
+  num_blocks.times do
+    offset -= 8
+    raise if offset < 0
+    block_size, block_id = bytes[offset, 8].unpack('LL')
+    offset -= block_size
+    raise if offset < 0
+    block = bytes[offset, block_size]
+
+    if block_id == 1  # world time
+      raise if block_size != 4
+      r[:world_time] = block.unpack1('L')
+    else
+      # Block we don't understand yet
+      r[block_id] = block
+    end
+  end
+
   r
 end
 
@@ -549,7 +577,7 @@ def aoe2rec_parse_operation(io)
   when 2 then aoe2rec_parse_sync(io)
   when 3 then aoe2rec_parse_viewlock(io)
   when 4 then aoe2rec_parse_chat(io)
-  when 6 then aoe2rec_parse_op6(io)
+  when 6 then aoe2rec_parse_postgame(io)
   else
     if operation_id > io.tell
       # I think when someone drops, the game inserts a new header in this
