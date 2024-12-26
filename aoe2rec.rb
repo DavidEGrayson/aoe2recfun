@@ -192,7 +192,7 @@ end
 
 def aoe2rec_parse_de_string(io)
   prefix = io.read(2)
-  expected_prefix = "`\n"
+  expected_prefix = "`\n".b
   if prefix != expected_prefix
     offset = io.tell - 1
     raise "Expected DE string at 0x%x, but got %s instead of %s." % \
@@ -269,13 +269,13 @@ def aoe2rec_parse_player(io, player_id, save_version)
 end
 
 def aoe2rec_parse_de_header(io, save_version)
-  r = {}
+  r = { unknown_de: [] }
 
   if save_version >= 25.22
-    r[:build] = io.read(4).unpack('L')
+    r[:build] = io.read(4).unpack1('L')
   end
   if save_version >= 26.16
-    r[:timestamp] = io.read(4).unpack('L')
+    r[:timestamp] = io.read(4).unpack1('L')
   end
 
   r[:version], r[:interval_version], r[:game_options_version], dlc_count =
@@ -296,7 +296,7 @@ def aoe2rec_parse_de_header(io, save_version)
   raise if separator1 != 155555
   raise if separator2 != 155555
 
-  r[:unk_byte1] = io.read(1) if save_version >= 61.3
+  r[:unknown_de] << io.read(1) if save_version >= 61.3
 
   separator3 = io.read(4).unpack1('L')
   raise if separator3 != 155555
@@ -320,7 +320,7 @@ def aoe2rec_parse_de_header(io, save_version)
     r[:handicap] = io.read(1)
   end
 
-  r[:unk_byte2] = io.read(1) if save_version >= 50
+  r[:unknown_de] << io.read(1) if save_version >= 50
 
   separator4 = io.read(4).unpack1('L')
 
@@ -334,7 +334,7 @@ def aoe2rec_parse_de_header(io, save_version)
   end
   r[:players].reject! { |pl| pl[:force_id] == 0xFFFFFFFF }
 
-  r[:unk_bytes9] = io.read(9)
+  r[:unknown_de] << io.read(9)
   r[:fog_of_war] = io.read(1).unpack1('C')
   r[:cheat_notifications] = io.read(1).unpack1('C')
   r[:colored_chat] = io.read(1).unpack1('C')
@@ -342,21 +342,21 @@ def aoe2rec_parse_de_header(io, save_version)
   if save_version >= 37
     empty_slot_count = 8 - r[:num_players]
     r[:empty_slots] = (0...empty_slot_count).map do
-      slot = {}
+      slot = { unknown: [] }
       if save_version >= 61.5
-        slot[:unk] = io.read(4).unpack1('L')
+        slot[:unknown] << io.read(4).unpack1('L')
       end
-      slot[:i0x] = io.read(4).unpack1('L')
-      slot[:i0a] = io.read(4).unpack1('L')
-      slot[:i0b] = io.read(4).unpack1('L')
-      slot[:s1] = aoe2rec_parse_de_string(io)
-      slot[:a2] = io.read(1)
-      slot[:s2] = aoe2rec_parse_de_string(io)
-      slot[:s3] = aoe2rec_parse_de_string(io)
-      slot[:a3] = io.read(22)
-      slot[:i1] = io.read(4).unpack1('L')
-      slot[:i2] = io.read(4).unpack1('L')
-      slot[:a4] = io.read(8)
+      slot[:unknown] << io.read(4).unpack1('L')
+      slot[:unknown] << io.read(4).unpack1('L')
+      slot[:unknown] << io.read(4).unpack1('L')
+      slot[:unknown] << aoe2rec_parse_de_string(io)
+      slot[:unknown] << io.read(1)
+      slot[:unknown] << aoe2rec_parse_de_string(io)
+      slot[:unknown] << aoe2rec_parse_de_string(io)
+      slot[:unknown] << io.read(22)
+      slot[:unknown] << io.read(4).unpack1('L')
+      slot[:unknown] << io.read(4).unpack1('L')
+      slot[:unknown] << io.read(8)
       slot
     end
   end
@@ -368,14 +368,13 @@ def aoe2rec_parse_de_header(io, save_version)
   r[:allow_specs] = io.read(1).unpack1('C')
   r[:lobby_visibility] = io.read(4).unpack1('L')
   r[:hidden_civs] = io.read(1).unpack1('C')
-  r[:matchmacking] = io.read(1).unpack1('C')
-
+  r[:matchmaking] = io.read(1).unpack1('C')
   if save_version >= 13.13
     r[:spec_delay] = io.read(4).unpack1('L')
     r[:scenario_civ] = io.read(1).unpack1('C')
   end
   r[:rms_strings] = aoe2rec_parse_string_block(io)
-  r[:unk_bytes8] = io.read(8)
+  r[:unknown_de] << io.read(8)
   r[:other_strings] = 20.times.collect do
     aoe2rec_parse_string_block(io)
   end
@@ -401,36 +400,38 @@ def aoe2rec_parse_de_header(io, save_version)
   end
 
   if save_version >= 25.02
-    r[:unknown_9] = io.read(8)
+    r[:unknown_de] << io.read(8)
   end
   r[:guid] = io.read(16)
   r[:lobby_name] = aoe2rec_parse_de_string(io)
 
   if save_version >= 25.22
-    r[:unknown10] = io.read(8)
+    r[:unknown_de] << io.read(8)
   end
   r[:modded_dataset] = aoe2rec_parse_de_string(io)
-  r[:unknown11] = io.read(19)
-  r[:unknown12] = io.read(5) if save_version >= 13.13
-  r[:unknown13] = io.read(9) if save_version >= 13.17
-  r[:unknown14] = io.read(1) if save_version >= 20.06
-  r[:unknown15] = io.read(8) if save_version >= 20.16
-  r[:unknown16] = io.read(21) if save_version >= 25.06
-  r[:unknown17] = io.read(4) if save_version >= 25.22
-  r[:unknown18] = io.read(8) if save_version >= 26.16
-  r[:unknown18_1] = io.read(3) if save_version >= 37
-  r[:unknown18_2] = io.read(8) if save_version >= 50
-  r[:unknown18_3] = io.read(1) if save_version >= 61.5
-  r[:unknown18_4] = io.read(5) if save_version >= 63
-  r[:unknown19] = aoe2rec_parse_de_string(io)
-  r[:unknown20] = io.read(5)
-  r[:unknown21] = io.read(1) if save_version >= 13.13
+  r[:unknown_de] << io.read(5) if save_version >= 13.13
+  r[:unknown_de] << io.read(19)
+  r[:unknown_de] << io.read(3) if save_version >= 13.17
+  r[:unknown_de] << aoe2rec_parse_de_string(io) if save_version >= 13.17
+  r[:unknown_de] << io.read(2) if save_version >= 13.17
+  r[:unknown_de] << io.read(1) if save_version >= 20.06
+  r[:unknown_de] << io.read(8) if save_version >= 20.16
+  r[:unknown_de] << io.read(21) if save_version >= 25.06
+  r[:unknown_de] << io.read(4) if save_version >= 25.22
+  r[:unknown_de] << io.read(8) if save_version >= 26.16
+  r[:unknown_de] << io.read(3) if save_version >= 37
+  r[:unknown_de] << io.read(8) if save_version >= 50
+  r[:unknown_de] << io.read(1) if save_version >= 61.5
+  r[:unknown_de] << io.read(5) if save_version >= 63
+  r[:unknown_de] << aoe2rec_parse_de_string(io)
+  r[:unknown_de] << io.read(5)
+  r[:unknown_de] << io.read(1) if save_version >= 13.13
   if save_version >= 13.17
-    r[:unknown22] = io.read(2)
+    r[:unknown_de] << io.read(2)
   else
-    r[:unknown23] = aoe2rec_parse_de_string(io)
-    r[:unknown24] = io.read(4)
-    r[:unknown25] = io.read(4)
+    r[:unknown_de] << aoe2rec_parse_de_string(io)
+    r[:unknown_de] << io.read(4)
+    r[:unknown_de] << io.read(4)
   end
 
   r
@@ -487,13 +488,9 @@ def aoe2rec_parse_header(io)
 
   parts = io.read(32).unpack('VVVVVVVV')
   r[:log_version] = parts[0]
-  r[:unknown1] = parts[1]
-  r[:unknown2] = parts[2]
-  r[:unknown3] = parts[3]
   r[:force_id] = parts[4]
-  r[:unknown5] = parts[5]
-  r[:unknown6] = parts[6]
   r[:other_version] = parts[7]
+  r[:unknown] = [ parts[1], parts[2], parts[3], parts[5], parts[6] ]
 
   if r[:log_version] != 5
     raise "Expected log_version to be 5, got #{r[:log_version]}."

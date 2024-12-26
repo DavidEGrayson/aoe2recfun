@@ -7,6 +7,8 @@ $stdout.sync = true
 
 def dump_header(header)
   puts "File format version: #{header.fetch(:save_version)}"
+  puts "Build: ##{header.fetch(:build)}"
+  puts "Lobby name: #{header.fetch(:lobby_name)}"
   puts "Map: #{aoe2de_map_name(header.fetch(:resolved_map_id))}"
   puts "Players:"
   header[:players].each do |pi|
@@ -16,6 +18,15 @@ def dump_header(header)
     ]
   end
   puts "Recorded by FID #{header.fetch(:force_id)}"
+
+  if false
+    # Dump unprocessed, potentially useful stuff from the header
+    header = header.dup
+    %i{inflated_header players empty_slots}.each do |sym|
+      header.delete(sym)
+    end
+    p header
+  end
 end
 
 def dump_file(filename)
@@ -29,8 +40,11 @@ def dump_file(filename)
   while true
     op = aoe2rec_parse_operation(io)
     break if !op
-    if op[:operation] == :sync
+    if op.fetch(:operation) == :sync
       time += op.fetch(:time_increment)
+    end
+    if op.fetch(:operation) == :seek
+      puts "%s: seek to %d" % [aoe2_pretty_time(time), op.fetch(:offset)]
     end
     if op.fetch(:operation) == :chat
       chat = JSON.parse(op.fetch(:json), symbolize_names: true)
