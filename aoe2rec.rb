@@ -496,18 +496,8 @@ def aoe2rec_parse_de_ai(io, save_version)
     raise "Unexpected stuff after six-pack clumps: #{stuff.inspect}."
   end
 
-  more_stuff_count = io.read(4).unpack1('L')
-  raise if more_stuff_count != 100
-  r[:unknown_ai] << io.read(more_stuff_count)
-
-  r[:unknown_ai] << io.read(4).unpack('L') # 3
-
-  # tmphax: make remainder.bin
-  $stderr.puts "Warning: don't know how to parse the rest of this AI data (has_ai=#{has_ai})"
-  remainder = io.read
-  $stderr.puts "Dumping to remainder.bin for inspection (but it's the whole header, not just AI data)."
-  File.open('remainder.bin', 'wb') { |f| f.write(remainder) }
-  io = StringIO.new(remainder)
+  r[:unknown_ai] << io.read(4).unpack1('L')  # 0 or 100
+  r[:unknown_ai] << io.read(104)
 
   expected_ff_byte_count = 2624
   ff = io.read(expected_ff_byte_count)
@@ -559,6 +549,12 @@ def aoe2rec_parse_compressed_header(header)
 
   r.merge! aoe2rec_parse_de_header(io, r[:save_version])
   r.merge! aoe2rec_parse_de_ai(io, r[:save_version])
+
+  # tmphax: make remainder.bin
+  remainder_offset = io.tell
+  $stderr.puts "Dumping from offset %x to remainder.bin for inspection" % remainder_offset
+  File.open('remainder.bin', 'wb') { |f| f.write(io.read) }
+  io.seek(remainder_offset)
 
   # NOTE: There is other stuff in the header that we have not parsed.
 
