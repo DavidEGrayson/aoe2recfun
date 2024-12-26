@@ -15,6 +15,12 @@ class String
   end
 end
 
+def to_bool(num)
+  return false if num == 0
+  return true if num == 1
+  raise "Expected boolean, got #{num.inspect}."
+end
+
 # for debugging
 def dump_remainder(io)
   $remainder_id ||= 0
@@ -159,6 +165,7 @@ AOE2DE_MAP_NAMES = {
   174 => 'Wade',
   175 => 'Morass',
   180 => 'Golden Stream',
+  185 => 'The Passage',
 }
 
 def aoe2de_map_name(id)
@@ -316,15 +323,21 @@ def aoe2rec_parse_de_header(io, save_version)
   raise if separator3 != 155555
 
   meat = io.read(15).unpack('C' * 15)
-  r[:trade_enabled],
-    r[:team_bonus_disabled], r[:random_positions],
-    r[:all_techs], r[:num_starting_units],
-    r[:lock_teams], r[:lock_speed],
-    r[:multiplayer], r[:cheats],
-    r[:record_game], r[:animals_enabled],
-    r[:predators_enabled], r[:turbo_enabled],
-    r[:shared_exploration], r[:team_positions] =
-    meat
+  r[:trade_enabled] = to_bool(meat[0])
+  r[:team_bonus_disabled] = to_bool(meat[1])
+  r[:random_positions] = to_bool(meat[2])
+  r[:all_techs] = to_bool(meat[3])
+  r[:num_starting_units] = to_bool(meat[4])
+  r[:lock_teams] = to_bool(meat[5])
+  r[:lock_speed] = to_bool(meat[6])
+  r[:multiplayer] = to_bool(meat[7])
+  r[:cheats_enabled] = to_bool(meat[8])
+  r[:record_game] = to_bool(meat[9])
+  r[:animals_enabled] = to_bool(meat[10])
+  r[:predators_enabled] = to_bool(meat[11])
+  r[:turbo_enabled] = to_bool(meat[12])
+  r[:shared_exploration] = to_bool(meat[13])
+  r[:team_positions] = to_bool(meat[14])
 
   if save_version >= 13.34
     r[:sub_game_mode], r[:battle_royale_time] = io.read(8).unpack('LL')
@@ -378,11 +391,11 @@ def aoe2rec_parse_de_header(io, save_version)
   separator5 = io.read(4).unpack1('L')
   raise if separator5 != 155555
 
-  r[:ranked] = io.read(1).unpack1('C')
-  r[:allow_specs] = io.read(1).unpack1('C')
-  r[:lobby_visibility] = io.read(4).unpack1('L')
-  r[:hidden_civs] = io.read(1).unpack1('C')
-  r[:matchmaking] = io.read(1).unpack1('C')
+  r[:ranked] = to_bool(io.read(1).unpack1('C'))
+  r[:allow_specs] = to_bool(io.read(1).unpack1('C'))
+  r[:lobby_visibility] = to_bool(io.read(4).unpack1('L'))
+  r[:hidden_civs] = to_bool(io.read(1).unpack1('C'))
+  r[:matchmaking] = to_bool(io.read(1).unpack1('C'))
   if save_version >= 13.13
     r[:spec_delay] = io.read(4).unpack1('L')
     r[:scenario_civ] = io.read(1).unpack1('C')
@@ -438,7 +451,10 @@ def aoe2rec_parse_de_header(io, save_version)
   r[:unknown_de] << io.read(3) if save_version >= 37
   r[:unknown_de] << io.read(8) if save_version >= 50
   r[:unknown_de] << io.read(1) if save_version >= 61.5
-  r[:unknown_de] << io.read(5) if save_version >= 63
+  if save_version >= 63
+    r[:unknown_de] << io.read(4)
+    r[:antiquity_mode] = to_bool(io.read(1).ord)
+  end
   r[:unknown_de] << aoe2rec_parse_de_string(io)
   r[:unknown_de] << io.read(5)
   r[:unknown_de] << io.read(1) if save_version >= 13.13
@@ -553,17 +569,33 @@ end
 def aoe2rec_parse_replay(io, save_version)
   r = {}
 
-  old_time, world_time, old_world_time, r[:game_speed_id],
-    world_time_delta_seconds, timer, r[:game_speed_float],
-    temp_pause, r[:next_object_id], r[:next_reusable_object_id],
-    r[:random_seed], random_seed_2, r[:rec_player],
-    r[:player_count_including_gaia],
-    r[:instant_build], r[:cheats_enabled], r[:game_mode],
-    r[:campaign], r[:campaign_player], r[:campain_scenario],
-    r[:king_campaign], r[:king_campaign_player], r[:king_campaign_scenario],
-    r[:player_turn] =
-    io.read(7*4 + 1 + 2*4 + 8 + 2 + 1 + 1 + 1 + 2 + 3*4 + 4 + 1 + 1 + 4).unpack(
-      'LLLLLFFCllLLSCCCSSLLLLCCL')
+  parts = io.read(7*4 + 1 + 2*4 + 8 + 2 + 1 + 1 + 1 + 2 + 3*4 + 4 + 1 + 1 + 4).unpack(
+    'LLLLLFFCllLLSCCCSLLLLCCL')
+
+  old_time = parts[0]
+  world_time = parts[1]
+  old_world_time = parts[2]
+  r[:game_speed_id] = parts[3]
+  world_time_delta_seconds = parts[4]
+  timer = parts[5]
+  r[:game_speed_float] = parts[6]
+  temp_pause = parts[7]
+  r[:next_object_id] = parts[8]
+  r[:next_reusable_object_id] = parts[9]
+  r[:random_seed] = parts[10]
+  random_seed_2 = parts[11]
+  r[:rec_player] = parts[12]
+  r[:player_count_including_gaia] = parts[13]
+  r[:instant_build] = parts[14]
+  old_cheats_enabled = parts[15]
+  r[:game_mode] = parts[16]
+  r[:campaign] = parts[17]
+  r[:campaign_player] = parts[18]
+  r[:campain_scenario] = parts[19]
+  r[:king_campaign] = parts[20]
+  r[:king_campaign_player] = parts[21]
+  r[:king_campaign_scenario] = parts[22]
+  r[:player_turn] = parts[23]
 
   raise if random_seed_2 != r.fetch(:random_seed)
   raise if old_time != 0
@@ -572,6 +604,7 @@ def aoe2rec_parse_replay(io, save_version)
   raise if world_time_delta_seconds != 0
   raise if timer != 0
   raise if temp_pause != 0
+  raise if old_cheats_enabled != 0
 
   count = save_version >= 61.5 ? r[:player_count_including_gaia] : 9
   r[:player_time_delta] = io.read(count * 4).unpack('L*')
@@ -709,11 +742,6 @@ def aoe2rec_parse_header(io)
   end
   r.delete(:player_count_including_gaia)
 
-  if r[:cheats_enabled] != r[:cheats]
-    raise "Cheats mismatch: #{r[:cheats_enabled]} != #{r[:cheats]}."
-  end
-  r.delete(:cheats_enabled)
-
   if r[:rec_player] != r[:rec_force_id]
     raise "rec_player mismatch: #{r[:rec_player]} != #{r[:rec_force_id]}."
   end
@@ -725,7 +753,7 @@ end
 def aoe2rec_encode_header(header)
   deflater = Zlib::Deflate.new(Zlib::DEFAULT_COMPRESSION, -15)
   # just set next_chapter to 0 since we don't know the right address yet
-  compressed_header = "\x00\x00\x00\x00"
+  compressed_header = "\x00\x00\x00\x00".b
   compressed_header << deflater.deflate(header.fetch(:inflated_header))
   compressed_header << deflater.deflate(nil)
   deflater.close

@@ -15,6 +15,9 @@ def dump_header(header)
     map += ", from " + aoe2de_map_name(header.fetch(:selected_map_id))
   end
   puts "Map: " + map
+  if header[:antiquity_mode]
+    puts "Antiquity Mode"
+  end
   puts "Players:"
   header[:players].each do |pi|
     puts "  %d %-30s ID %d, FID %d, T %d, PR %d" % [
