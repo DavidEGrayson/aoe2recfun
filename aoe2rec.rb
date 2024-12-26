@@ -460,23 +460,14 @@ def aoe2rec_parse_de_ai(io, save_version)
 
   r[:unknown_ai] << io.read(2).unpack1('S')
   r[:unknown_ai] << io.read(2).unpack1('S')
-  r[:unknown_ai] << io.read(3).unpack('CCC')
+  r[:unknown_ai] += io.read(3).unpack('CCC')
 
-  r[:unknown_ai] += io.read(16).unpack('LLLL')
-
-  p r[:unknown_ai]
-
-  $stderr.puts "Warning: don't know how to parse the rest of this AI data (has_ai=#{has_ai})"
-  remainder = io.read
-  $stderr.puts "Dumping to remainder.bin for inspection (but it's the whole header, not just AI data)."
-  File.open('remainder.bin', 'wb') do |f|
-    f.write(remainder)
-  end
-
-  io = StringIO.new(remainder)  # tmphax
+  r[:unknown_ai] += io.read(10).unpack('LLS')
+  six_pack_clump_count = io.read(2).unpack1('S')
+  r[:unknown_ai] << io.read(4).unpack1('L')
 
   last_seq = -1
-  while true
+  r[:six_pack_clumps] = six_pack_clump_count.times.collect do
     offset = io.tell
     six_pack_header = io.read(24)
     parts = six_pack_header.unpack('llssCCsLL')
@@ -497,29 +488,38 @@ def aoe2rec_parse_de_ai(io, save_version)
       end
       six_pack
     end
-    puts "Six-pack clump: #{clump.inspect}"
+    clump
   end
 
-  # I found a pattern!  If we treat the remainder as a bunch of signed ints,
-  # we occasionally see ones less than -60000 which form an ascending pattern.
-  # So I think it's two shorts: a sequence number starting at 0, and -1.
-  # Before this 4-byte pattern, we always see 3 ints: 0, 1, 1.
-  if false
-    last_special_offset = 0
-    1000.times do
-      offset = io.tell
-      value = io.read(4).unpack1('l')
-      if value < -60000
-        puts "S 0x%06x: %d (%d since last special)" % [offset, value, offset - last_special_offset]
-        last_special_offset = offset
-      else
-        puts "  0x%06x: %d" % [offset, value]
-      end
-    end
+  stuff = io.read(7 * 16).unpack('l*')
+  if stuff != [0, -1, 0, 0] * 7
+    raise "Unexpected stuff after six-pack clumps: #{stuff.inspect}."
   end
 
-  puts "bye bye"
-  exit 1
+  more_stuff_count = io.read(4).unpack1('L')
+  raise if more_stuff_count != 100
+  r[:unknown_ai] << io.read(more_stuff_count)
+
+  r[:unknown_ai] << io.read(4).unpack('L') # 3
+
+  # tmphax: make remainder.bin
+  $stderr.puts "Warning: don't know how to parse the rest of this AI data (has_ai=#{has_ai})"
+  remainder = io.read
+  $stderr.puts "Dumping to remainder.bin for inspection (but it's the whole header, not just AI data)."
+  File.open('remainder.bin', 'wb') { |f| f.write(remainder) }
+  io = StringIO.new(remainder)
+
+  expected_ff_byte_count = 2624
+  ff = io.read(expected_ff_byte_count)
+  if ff != "\xFF".b * expected_ff_byte_count
+    raise "0xFF bytes are not as expected: #{ff.inspect} (#{ff.size})"
+  end
+
+  expected_zero_byte_count = 4096
+  zero_bytes = io.read(expected_zero_byte_count)
+  if zero_bytes != "\x00".b * expected_zero_byte_count
+    raise "0x00 bytes are not as expected"
+  end
 
   return r
 end
