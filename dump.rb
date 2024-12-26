@@ -28,7 +28,7 @@ def dump_header(header)
     # Dump more potentially useful stuff from the header
     header = header.dup
     info_printed = %i{inflated_header players empty_slots resolved_map_id selected_map_id
-      build lobby_name save_version timestamp ai_strings ai_scripts}
+      build lobby_name save_version timestamp ai_strings ai_scripts map_zones tiles}
     info_printed.each do |sym|
       header.delete(sym)
     end

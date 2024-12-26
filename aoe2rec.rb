@@ -548,6 +548,91 @@ def aoe2rec_parse_de_ai(io, save_version)
   return r
 end
 
+# Parse a section of basic info from the header which comes after the AI
+# info and is called "reply" by aoc-mgz
+def aoe2rec_parse_replay(io, save_version)
+  r = {}
+
+  old_time, world_time, old_world_time, r[:game_speed_id],
+    world_time_delta_seconds, timer, r[:game_speed_float],
+    temp_pause, r[:next_object_id], r[:next_reusable_object_id],
+    r[:random_seed], r[:random_seed_2], r[:rec_player], r[:player_count],
+    r[:instant_build], r[:cheats_enabled], r[:game_mode],
+    r[:campaign], r[:campaign_player], r[:campain_scenario],
+    r[:king_campaign], r[:king_campaign_player], r[:king_campaign_scenario],
+    r[:player_turn] =
+    io.read(7*4 + 1 + 2*4 + 8 + 2 + 1 + 1 + 1 + 2 + 3*4 + 4 + 1 + 1 + 4).unpack(
+      'LLLLLFFCllLLSCCCSSLLLLCCL')
+
+  raise if old_time != 0
+  raise if world_time != 0
+  raise if old_world_time != 0
+  raise if world_time_delta_seconds != 0
+  raise if timer != 0
+  raise if temp_pause != 0
+
+  count = save_version >= 61.5 ? r[:player_count] : 9
+  r[:player_time_delta] = io.read(count * 4).unpack('L*')
+
+  r[:replay_padding] = io.read(8)
+  raise if r[:replay_padding] != "\xad\xde\xad\xde\x03\0\0\0".b
+
+  r
+end
+
+def aoe2rec_parse_map(io, save_version)
+  r = {}
+
+  r[:size_x], r[:size_y], zone_count = io.read(12).unpack('LLL')
+
+  if r[:size_x] == 0 || r[:size_x] != r[:size_y]
+    raise "Unexpected map sizes: #{r[:size_x]} #{r[:size_y]}"
+  end
+
+  tile_count = r[:size_x] * r[:size_y]
+
+  r[:map_zones] = zone_count.times.collect do
+    zone = {}
+    zone[:data] = io.read(2048 + tile_count * 2)
+    float_count = io.read(4).unpack1('L')
+    zone[:floats] = io.read(float_count * 4).unpack('F*')
+    zone[:unknown] = io.read(4).unpack1('L')
+    zone
+  end
+
+  r[:all_visible], r[:fog_of_war] = io.read(2).unpack('CC')
+
+  # TODO: this has got to be slow... parse the tiles if the user requests it
+  r[:tiles] = tile_count.times.collect do |i|
+    tile = { }
+    tile[:terrain_type] = terrain_type = io.read(1).ord
+
+    padding1 = io.read(1).unpack1('c')
+    raise if padding1 != -1
+
+    if save_version >= 62.0
+      terrain_type2 = io.read(1).ord
+      tile[:terrain_type2] = terrain_type2 if terrain_type2 != terrain_type
+    end
+
+    tile[:elevation] = io.read(1).ord
+    padding2, tile[:unknown] = io.read(4).unpack('ss')
+    raise if padding2 != -1
+
+    # TODO: also if "check.val" > 1000 we're supposed to run this part of the code,
+    # according to aoc-mgz, but maybe we don't care about supporting DE recs
+    # that are older than 13.03 properly.
+    if save_version >= 13.03
+      unknown2 = io.read(2).unpack1('s')
+      tile[:unknown2] = unknown2 if unknown2 != tile[:unknown]
+    end
+
+    tile
+  end
+
+  r
+end
+
 def aoe2rec_parse_compressed_header(header)
   r = { }
   io = StringIO.new(header)
@@ -581,8 +666,10 @@ def aoe2rec_parse_compressed_header(header)
     $stderr.puts "Warning: expected save_version to be at least 12.97, got #{r[:save_version]}."
   end
 
-  r.merge! aoe2rec_parse_de_header(io, r[:save_version])
-  r.merge! aoe2rec_parse_de_ai(io, r[:save_version])
+  r.merge! aoe2rec_parse_de_header(io, save_version)
+  r.merge! aoe2rec_parse_de_ai(io, save_version)
+  r.merge! aoe2rec_parse_replay(io, save_version)
+  r.merge! aoe2rec_parse_map(io, save_version)
 
   dump_remainder(io)
 
