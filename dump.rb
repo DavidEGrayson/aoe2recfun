@@ -39,7 +39,7 @@ def dump_file(filename)
     end
     if op.fetch(:operation) == :postgame
       game_finish_time = time
-      puts "#{aoe2_pretty_time(time)}: game finished"
+      puts "#{aoe2_pretty_time(time)}: [game finished]"
       if op.key?(:world_time)
         world_time = op.fetch(:world_time)
         if world_time != time
@@ -52,8 +52,10 @@ def dump_file(filename)
         op[:leaderboards].each do |board|
           id = board.fetch(:id)
           name = LEADERBOARD_NAMES.fetch(id, "Leaderboard #{id}")
+          players = board.fetch(:players)
+          next if players.empty?
           puts "#{name}"
-          board.fetch(:players).each do |player|
+          players.each do |player|
             puts "  %d #%-6d %5d" % [
               player.fetch(:id), player.fetch(:rank), player.fetch(:rating)
             ]
@@ -63,7 +65,7 @@ def dump_file(filename)
     end
   end
   if time != game_finish_time
-    puts "#{aoe2_pretty_time(time)}: replay finished"
+    puts "#{aoe2_pretty_time(time)}: [replay finished]"
   end
   puts
   puts
@@ -72,6 +74,12 @@ end
 
 $total_time = 0
 filenames = ARGV
+
+if filenames.size == 0
+  puts "Usage: ./dump.rb file1.aoe2record file2.aoe2record ..."
+  exit 1
+end
+
 filenames.each do |filename|
   begin
     dump_file(filename)
@@ -81,7 +89,7 @@ filenames.each do |filename|
     puts e.backtrace
     puts
     puts
-    #exit(1)
+    exit 1
   end
 end
 

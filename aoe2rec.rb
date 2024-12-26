@@ -191,9 +191,28 @@ def aoe2_pretty_chat(chat, players)
 end
 
 def aoe2rec_parse_de_string(io)
-  raise if io.read(2) != "`\n"
+  prefix = io.read(2)
+  expected_prefix = "`\n"
+  if prefix != expected_prefix
+    offset = io.tell - 1
+    raise "Expected DE string at 0x%x, but got %s instead of %s." % \
+      [offset, prefix.hex_inspect, expected_prefix.inspect]
+  end
   length = io.read(2).unpack1('S')
   io.read(length)
+end
+
+def aoe2rec_parse_string_block(io)
+  strings = []
+  while true
+    crc = io.read(4).unpack1('L')
+    if crc > 0 && crc <= 255
+      strings << [crc]
+      break
+    end
+    strings << [crc, aoe2rec_parse_de_string(io)]
+  end
+  strings
 end
 
 # In the returned hash:
@@ -350,25 +369,40 @@ def aoe2rec_parse_de_header(io, save_version)
   r[:lobby_visibility] = io.read(4).unpack1('L')
   r[:hidden_civs] = io.read(1).unpack1('C')
   r[:matchmacking] = io.read(1).unpack1('C')
-  r[:spec_delay] = io.read(4).unpack1('L')
 
   if save_version >= 13.13
+    r[:spec_delay] = io.read(4).unpack1('L')
     r[:scenario_civ] = io.read(1).unpack1('C')
-    r[:rms_crc] = io.read(4).unpack('L')
+  end
+  r[:rms_strings] = aoe2rec_parse_string_block(io)
+  r[:unk_bytes8] = io.read(8)
+  r[:other_strings] = 20.times.collect do
+    aoe2rec_parse_string_block(io)
   end
 
-  r[:unknown_strings] = 23.times.collect do
-    string = aoe2rec_parse_de_string(io)
-    nums = []
-    while true
-      n = io.read(4).unpack1('L')
-      nums << n
-      break if ![3, 21, 23, 42, 44, 45, 46, 47].include?(n)
-    end
-    [string, nums]
+  strategic_number_count = io.read(4).unpack1('L')
+  if save_version >= 25.22
+    strategic_number_read_size = strategic_number_count
+  else
+    strategic_number_read_size = 59
+  end
+  r[:strategic_numbers] = strategic_number_read_size.times.collect do
+    io.read(4).unpack1('L')
+  end[0, strategic_number_count]
+
+  ai_files_count = io.read(8).unpack1('Q')
+  r[:ai_files] = ai_files_count.times.collect do
+    aif = [
+      io.read(4),
+      aoe2rec_parse_de_string(io),
+      io.read(4),
+    ]
+    aif
   end
 
-  r[:unknown7] = io.read(16)  # all zeroes
+  if save_version >= 25.02
+    r[:unknown_9] = io.read(8)
+  end
   r[:guid] = io.read(16)
   r[:lobby_name] = aoe2rec_parse_de_string(io)
 
@@ -538,9 +572,14 @@ def aoe2rec_parse_postgame(io)
   end
 
   ending = "\xce\xa4\x59\xb1\x05\xdb\x7b\x43".b
-  bytes = ''.b
+  bytes = io.read(8)
   while bytes[-8,8] != ending
-    bytes += io.read(4)
+    chunk = io.read(1)
+    if chunk.nil?
+      raise "Reached EOF looking for postgame block ending: " \
+        "last_8_bytes=#{bytes[-8,8].hex_inspect}, expected_ending=#{ending.hex_inspect}"
+    end
+    bytes += chunk
   end
 
   version = bytes[-12, 4].unpack1('L')
