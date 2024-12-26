@@ -633,7 +633,7 @@ def aoe2rec_parse_replay(io, save_version)
   old_time = parts[0]
   world_time = parts[1]
   old_world_time = parts[2]
-  r[:game_speed_id] = parts[3]
+  old_game_speed_id = parts[3]
   world_time_delta_seconds = parts[4]
   timer = parts[5]
   r[:game_speed_float] = parts[6]
@@ -644,7 +644,7 @@ def aoe2rec_parse_replay(io, save_version)
   r[:random_seed_2] = parts[11]  # usually the same as random_seed, not always
   r[:rec_player] = parts[12]
   r[:player_count_including_gaia] = parts[13]
-  r[:instant_build] = parts[14]
+  old_instant_build = parts[14]
   old_cheats_enabled = parts[15]
   r[:unknown_replay] << parts[16]  # dunno what this is; usually 0, sometimes 1
   r[:campaign] = parts[17]
@@ -658,9 +658,11 @@ def aoe2rec_parse_replay(io, save_version)
   raise if old_time != 0
   raise if world_time != 0
   raise if old_world_time != 0
+  raise if old_game_speed_id != 0
   raise if world_time_delta_seconds != 0
   raise if timer != 0
   raise if temp_pause != 0
+  raise if old_instant_build != 0
   raise if old_cheats_enabled != 0
 
   count = save_version >= 61.5 ? r[:player_count_including_gaia] : 9
