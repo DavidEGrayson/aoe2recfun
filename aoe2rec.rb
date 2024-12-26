@@ -51,6 +51,7 @@ GAME_MODES = {
   0 => 'Random Map',
   1 => 'Regicide',
   2 => 'Death Match',
+  3 => 'Custom Scenario',
   6 => 'King of the Hill',
   8 => 'Defend the Wonder',
   10 => 'Capture the Relic',
