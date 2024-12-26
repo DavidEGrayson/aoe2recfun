@@ -8,8 +8,9 @@ $stdout.sync = true
 def dump_header(header)
   puts "File format version: #{header.fetch(:save_version)}"
   puts "Build: ##{header.fetch(:build)}"
-  puts "Lobby name: #{header.fetch(:lobby_name)}"
-  puts "Map: #{aoe2de_map_name(header.fetch(:resolved_map_id))}"
+  puts "Date: " + Time.at(header.fetch(:timestamp)).strftime("%Y-%m-%d %H:%M:%S")
+  puts "Lobby name: " + header.fetch(:lobby_name).to_s
+  puts "Map: " + aoe2de_map_name(header.fetch(:resolved_map_id))
   puts "Players:"
   header[:players].each do |pi|
     puts "  %d %-30s ID %d, FID %d, T %d, PR %d" % [
@@ -19,10 +20,12 @@ def dump_header(header)
   end
   puts "Recorded by FID #{header.fetch(:force_id)}"
 
-  if false
-    # Dump unprocessed, potentially useful stuff from the header
+  if true
+    # Dump more potentially useful stuff from the header
     header = header.dup
-    %i{inflated_header players empty_slots}.each do |sym|
+    info_printed = %i{inflated_header players empty_slots resolved_map_id
+      build lobby_name save_version timestamp}
+    info_printed.each do |sym|
       header.delete(sym)
     end
     p header

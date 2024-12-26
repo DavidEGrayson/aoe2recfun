@@ -411,9 +411,11 @@ def aoe2rec_parse_de_header(io, save_version)
   r[:modded_dataset] = aoe2rec_parse_de_string(io)
   r[:unknown_de] << io.read(5) if save_version >= 13.13
   r[:unknown_de] << io.read(19)
-  r[:unknown_de] << io.read(3) if save_version >= 13.17
-  r[:unknown_de] << aoe2rec_parse_de_string(io) if save_version >= 13.17
-  r[:unknown_de] << io.read(2) if save_version >= 13.17
+  if save_version >= 13.17
+      r[:unknown_de] << io.read(3)
+      r[:unknown_de] << aoe2rec_parse_de_string(io)
+      r[:unknown_de] << io.read(2)
+  end
   r[:unknown_de] << io.read(1) if save_version >= 20.06
   r[:unknown_de] << io.read(8) if save_version >= 20.16
   r[:unknown_de] << io.read(21) if save_version >= 25.06
@@ -433,8 +435,64 @@ def aoe2rec_parse_de_header(io, save_version)
     r[:unknown_de] << io.read(4)
     r[:unknown_de] << io.read(4)
   end
+  if save_version >= 13.17
+    r[:unknown_de] << io.read(4)
+    r[:unknown_de] << io.read(4)
+  end
 
   r
+end
+
+# aoc-mgz doesn't have a description of this stuff so I'm figuring it out
+# myself.
+def aoe2rec_parse_de_ai(io, save_version)
+  r = { unknown_ai: [] }
+  has_ai = io.read(4).unpack1('L')
+  return r if has_ai == 0
+
+  r[:unknown_ai] << io.read(2).unpack1('S')
+  num_strings = io.read(2).unpack1('S')
+  r[:unknown_ai] << io.read(4).unpack1('L')
+
+  r[:strings] = num_strings.times.collect do
+    io.read(io.read(4).unpack1('L'))
+  end
+
+  r[:unknown_ai] << io.read(2).unpack1('S')
+  r[:unknown_ai] << io.read(2).unpack1('S')
+  r[:unknown_ai] << io.read(3).unpack('CCC')
+
+  p r[:unknown_ai]
+
+  $stderr.puts "Warning: don't know how to parse the rest of this AI data (has_ai=#{has_ai})"
+  remainder = io.read
+  $stderr.puts "Dumping to remainder.bin for inspection (but it's the whole header, not just AI data)."
+  File.open('remainder.bin', 'wb') do |f|
+    f.write(remainder)
+  end
+
+  io = StringIO.new(remainder)  # tmphax
+
+  # I found a pattern!  If we treat the remainder as a bunch of signed ints,
+  # we occasionally see ones less than -60000 which form an ascending pattern.
+  # So I think it's two shorts: a sequence number starting at 0, and -1.
+  # Before this 4-byte pattern, we always see 3 ints: 0, 1, 1.
+  last_special_offset = 0
+  1000.times do
+    offset = io.tell
+    value = io.read(4).unpack1('l')
+    if value < -60000
+      puts "S 0x%06x: %d (%d since last special)" % [offset, value, offset - last_special_offset]
+      last_special_offset = offset
+    else
+      puts "  0x%06x: %d" % [offset, value]
+    end
+  end
+
+  puts "bye bye"
+  exit 1
+
+  return r
 end
 
 def aoe2rec_parse_compressed_header(header)
@@ -471,6 +529,7 @@ def aoe2rec_parse_compressed_header(header)
   end
 
   r.merge! aoe2rec_parse_de_header(io, r[:save_version])
+  r.merge! aoe2rec_parse_de_ai(io, r[:save_version])
 
   # NOTE: There is other stuff in the header that we have not parsed.
 
