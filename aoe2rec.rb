@@ -144,6 +144,7 @@ AOE2DE_MAP_NAMES = {
   169 => 'Enclosed',
   170 => 'Haboob',
   172 => 'Land Madness',
+  174 => 'Wade',
   175 => 'Morass',
 }
 
@@ -448,6 +449,7 @@ end
 def aoe2rec_parse_de_ai(io, save_version)
   r = { unknown_ai: [] }
   has_ai = io.read(4).unpack1('L')
+  raise "has_ai = #{has_ai}" if has_ai > 1
   return r if has_ai == 0
 
   r[:unknown_ai] << io.read(2).unpack1('S')
@@ -460,44 +462,72 @@ def aoe2rec_parse_de_ai(io, save_version)
 
   r[:unknown_ai] << io.read(2).unpack1('S')
   r[:unknown_ai] << io.read(2).unpack1('S')
-  r[:unknown_ai] += io.read(3).unpack('CCC')
+  r[:unknown_ai] << io.read(1).unpack1('C')
+  ai_count = io.read(1).unpack1('C')
+  r[:unknown_ai] << io.read(1).unpack1('C')
 
-  r[:unknown_ai] += io.read(10).unpack('LLS')
-  six_pack_clump_count = io.read(2).unpack1('S')
-  r[:unknown_ai] << io.read(4).unpack1('L')
+  raise "Unexpected ai_count (#{ai_count})" if ai_count != 8
 
-  last_seq = -1
-  r[:ai_six_pack_clumps] = six_pack_clump_count.times.collect do
-    offset = io.tell
-    six_pack_header = io.read(24)
-    parts = six_pack_header.unpack('llssCCsLL')
-    if parts[0] != 1 || parts[1] != 1 || parts[3] != -1
-      raise "Six-pack clump pattern ended at 0x%x: %s" % [offset, six_pack_header.hex_inspect]
-    end
-    seq = parts[2]
-    if seq != last_seq + 1
-      raise "Six-pack clump sequence pattern ended."
-    end
-    last_seq = seq
-    clump = { unknown: [parts[4], parts[6], parts[7], parts[8]] }
-    six_pack_count = parts[5]
-    clump[:six_packs] = six_pack_count.times.collect do
-      six_pack = io.read(6*4).unpack('LLLLLL')
-      if ![1, 2, 3].include?(six_pack[0])
-        raise "Unexpected six-pack at 0x%x: %s" % [io.tell, six_pack.inspect]
+  r[:ais] = []
+  ai_count.times do |i|
+    ai_header = io.read(16)
+    ai_header_parts = ai_header.unpack('llssl')
+    is_ai = ai_header_parts[0]
+
+    if is_ai == 0
+      if ai_header_parts != [0, -1, 0, 0, 0]
+        raise "Unexpected pattern for empty AI slot: #{ai_header.hex_inspect}"
       end
-      six_pack
+      next
     end
-    clump
+
+    ai = { unknown: [ai_header_parts[2], ai_header_parts[4] ] }
+    ai[:id] = ai_header_parts[1]
+    if ai[:id] != i
+      raise "Unexpected AI ID: #{r[:id]} != #{i}"
+    end
+
+    six_pack_clump_count = ai_header_parts[3]
+    last_seq = -1
+    ai[:six_pack_clumps] = six_pack_clump_count.times.collect do
+      offset = io.tell
+      six_pack_header = io.read(24)
+      clump_parts = six_pack_header.unpack('llssCCsLL')
+      if clump_parts[0] != 1 || clump_parts[1] != 1 || clump_parts[3] != -1
+        raise "Six-pack clump pattern ended at 0x%x: %s" % [offset, six_pack_header.hex_inspect]
+      end
+      seq = clump_parts[2]
+      if seq != last_seq + 1
+        raise "Six-pack clump sequence pattern ended."
+      end
+      last_seq = seq
+      clump = { unknown: [] }
+      clump[:unknown] += [clump_parts[4], clump_parts[6], clump_parts[7], clump_parts[8]]
+      six_pack_count = clump_parts[5]
+      clump[:six_packs] = six_pack_count.times.collect do
+        six_pack = io.read(6*4).unpack('LLLLLL')
+        if ![1, 2, 3].include?(six_pack[0])
+          raise "Unexpected six-pack at 0x%x: %s" % [io.tell, six_pack.inspect]
+        end
+        six_pack
+      end
+      clump
+    end
+    ai_dump = ai.dup
+    ai_dump.delete(:six_pack_clumps)
+    p ai_dump
+    r[:ais] << ai
   end
 
-  stuff = io.read(7 * 16).unpack('l*')
-  if stuff != [0, -1, 0, 0] * 7
-    raise "Unexpected stuff after six-pack clumps: #{stuff.inspect}."
-  end
+  r[:unknown_ai] << io.read(4).unpack1('L')  # 0 or 100, thought it was a count
+  r[:unknown_ai] << io.read(100)
+  r[:unknown_ai] << io.read(4)
 
-  r[:unknown_ai] << io.read(4).unpack1('L')  # 0 or 100
-  r[:unknown_ai] << io.read(104)
+  # tmphax: make remainder.bin
+  remainder_offset = io.tell
+  puts "Dumping from offset %x to remainder.bin for inspection\n" % remainder_offset
+  File.open('remainder.bin', 'wb') { |f| f.write(io.read) }
+  io.seek(remainder_offset)
 
   expected_ff_byte_count = 2624
   ff = io.read(expected_ff_byte_count)
@@ -549,12 +579,6 @@ def aoe2rec_parse_compressed_header(header)
 
   r.merge! aoe2rec_parse_de_header(io, r[:save_version])
   r.merge! aoe2rec_parse_de_ai(io, r[:save_version])
-
-  # tmphax: make remainder.bin
-  remainder_offset = io.tell
-  $stderr.puts "Dumping from offset %x to remainder.bin for inspection" % remainder_offset
-  File.open('remainder.bin', 'wb') { |f| f.write(io.read) }
-  io.seek(remainder_offset)
 
   # NOTE: There is other stuff in the header that we have not parsed.
 
