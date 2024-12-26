@@ -454,7 +454,7 @@ def aoe2rec_parse_de_ai(io, save_version)
   num_strings = io.read(2).unpack1('S')
   r[:unknown_ai] << io.read(4).unpack1('L')
 
-  r[:strings] = num_strings.times.collect do
+  r[:ai_strings] = num_strings.times.collect do
     io.read(io.read(4).unpack1('L'))
   end
 
@@ -467,7 +467,7 @@ def aoe2rec_parse_de_ai(io, save_version)
   r[:unknown_ai] << io.read(4).unpack1('L')
 
   last_seq = -1
-  r[:six_pack_clumps] = six_pack_clump_count.times.collect do
+  r[:ai_six_pack_clumps] = six_pack_clump_count.times.collect do
     offset = io.tell
     six_pack_header = io.read(24)
     parts = six_pack_header.unpack('llssCCsLL')
@@ -479,7 +479,7 @@ def aoe2rec_parse_de_ai(io, save_version)
       raise "Six-pack clump sequence pattern ended."
     end
     last_seq = seq
-    clump = { unknown: [parts[2], parts[4], parts[6], parts[7], parts[8]] }
+    clump = { unknown: [parts[4], parts[6], parts[7], parts[8]] }
     six_pack_count = parts[5]
     clump[:six_packs] = six_pack_count.times.collect do
       six_pack = io.read(6*4).unpack('LLLLLL')
