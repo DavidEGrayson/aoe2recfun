@@ -17,6 +17,23 @@ def dump_header(header)
     mode = header[:game_mode]
     puts "Game mode: " + GAME_MODES.fetch(mode, mode.to_s)
   end
+
+  map = aoe2de_map_name(header.fetch(:resolved_map_id))
+  if header[:selected_map_id] != header[:resolved_map_id]
+    map += ", from " + aoe2de_map_name(header.fetch(:selected_map_id))
+  end
+  puts "Map: " + map
+
+  puts "Map size: %dx%d" % [header.fetch(:size_x), header.fetch(:size_y)]
+
+  if header.fetch(:starting_resources_id) != 0
+    id = header.fetch(:starting_resources_id)
+    puts "Resources: " + STARTING_RESOURCES.fetch(id, id.to_s)
+  end
+
+  if header.fetch(:population_limit) != 200
+    puts "Population: %d" % header.fetch(:population_limit)
+  end
   if (header.fetch(:speed) - 1.69).abs > 0.001
     puts "Speed: %0.2f" % header[:speed]
   end
@@ -28,12 +45,38 @@ def dump_header(header)
     id = header[:ending_age_id]
     puts "Ending age: " + AGES.fetch(id, id.to_s)
   end
-  if header.fetch(:victory_type_id) != 9
+  if header.fetch(:victory_type_id) != 0
     id = header.fetch(:victory_type_id)
     puts "Victory: " + VICTORY_TYPES.fetch(id, id.to_s)
   end
-  if header[:lock_speed]
+  if header.fetch(:battle_royale_time) != 30
+    puts "Battle Royale Time: #{header.fetch(:battle_royale_time)}"
+  end
+  if header.fetch(:treaty_length) != 0
+    puts "Treaty Length: #{header.fetch(:treaty_length)}"
+  end
+
+  # "Team Settings"
+  if header.fetch(:lock_teams) != true
+    puts "Lock Teams: #{header.fetch(:lock_teams)}"
+  end
+  if header.fetch(:random_positions)
+    puts "Team Together: #{!header.fetch(:random_positions)}"
+  end
+  if header.fetch(:team_positions)
+    puts "Team Positions: #{header.fetch(:team_positions)}"
+  end
+  if header.fetch(:shared_exploration) != true
+    puts "Shared Exploration: #{header.fetch(:shared_exploration)}"
+  end
+  # TODO: handicap
+
+  # "Advanced Settings"
+  if header.fetch(:lock_speed)
     puts "Lock Speed"
+  end
+  if header[:cheats_enabled]
+    puts "Allow cheats"
   end
   if header[:full_tech_tree]
     puts "Full tech tree"
@@ -54,12 +97,6 @@ def dump_header(header)
     puts "Antiquity Mode"
   end
 
-  map = aoe2de_map_name(header.fetch(:resolved_map_id))
-  if header[:selected_map_id] != header[:resolved_map_id]
-    map += ", from " + aoe2de_map_name(header.fetch(:selected_map_id))
-  end
-  puts "Map: " + map
-
   puts "Players:"
   header[:players].each do |pi|
     puts "  %d %-30s ID %d, FID %d, T %d, PR %d" % [
@@ -69,13 +106,15 @@ def dump_header(header)
   end
   puts "Recorded by FID #{header.fetch(:rec_force_id)}"
 
-  if true
+  if false
     # Dump more potentially useful stuff from the header
     header = header.dup
     info_printed = %i{inflated_header players empty_slots resolved_map_id selected_map_id
       build lobby_name save_version timestamp ai_strings ai_scripts map_zones tiles game_mode
-      regicide_mode empire_wars_mode sudden_death_mode antiquity_mode
-      starting_age_id ending_age_id}
+      regicide_mode empire_wars_mode sudden_death_mode antiquity_mode full_tech_tree
+      starting_age_id ending_age_id size_x size_y population_limit lock_speed
+      turbo_enabled starting_resources_id lock_teams team_positions random_positions
+      battle_royale_time cheats_enabled shared_exploration treaty_length}
     info_printed.each do |sym|
       header.delete(sym)
     end

@@ -42,6 +42,7 @@ AGES = {
 }
 
 VICTORY_TYPES = {
+  0 => 'Standard',
   9 => 'Conquest',
   11 => 'Last Man Standing',
 }
@@ -51,6 +52,8 @@ GAME_MODES = {
   1 => 'Regicide',
   2 => 'Death Match',
   6 => 'King of the Hill',
+  8 => 'Defend the Wonder',
+  10 => 'Capture the Relic',
   11 => 'Sudden Death',
   12 => 'Battle Royale',
   13 => 'Empire Wars',
@@ -59,6 +62,16 @@ GAME_MODES = {
 LEADERBOARD_NAMES = {
   3 => '1v1 RM',
   4 => 'Team RM',
+}
+
+STARTING_RESOURCES = {
+  0 => 'Standard',
+  1 => 'Low',
+  2 => 'Medium',
+  3 => 'High',
+  4 => 'Ultra High',
+  5 => 'Infinite',
+  6 => 'Random',
 }
 
 AOE2DE_MAP_NAMES = {
@@ -183,6 +196,7 @@ AOE2DE_MAP_NAMES = {
   154 => 'Michi',
   155 => 'Team Moats',
   156 => 'Volcanic Island',
+  158 => 'Eruption',
   159 => 'Frigid Lake',
   164 => 'Mountain Range',
   169 => 'Enclosed',
@@ -191,10 +205,12 @@ AOE2DE_MAP_NAMES = {
   174 => 'Wade',
   175 => 'Morass',
   177 => 'Cliffbound',
+  179 => 'Dunesprings',
   180 => 'Golden Stream',
   181 => 'Mountain Dunes',
   182 => 'River Divide',
   183 => 'Sandrift',
+  184 => 'Shrubland',
   185 => 'The Passage',
 }
 
@@ -329,8 +345,10 @@ def aoe2rec_parse_de_header(io, save_version)
     r[:timestamp] = io.read(4).unpack1('L')
   end
 
-  r[:version], r[:interval_version], r[:game_options_version], dlc_count =
+  r[:version], r[:interval_version], game_options_version, dlc_count =
     io.read(16).unpack('FLLL')
+
+  raise if game_options_version != 1
 
   r[:dlc_ids] = io.read(dlc_count * 4).unpack('L*')
 
@@ -731,7 +749,6 @@ def aoe2rec_parse_compressed_header(header)
   if game_version != "VER 9.4"
     raise "Expected game_version to be 'VER 9.4', got #{game_version}."
   end
-  r[:game_version] = game_version
 
   save_version = io.read(4).unpack1('F').round(2)
   if save_version == -1.0
