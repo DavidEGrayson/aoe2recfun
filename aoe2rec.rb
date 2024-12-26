@@ -32,6 +32,11 @@ def dump_remainder(io)
   $remainder_id += 1
 end
 
+GAME_MODES = {
+  0 => 'Random Map',
+  1 => 'Regicide',
+}
+
 LEADERBOARD_NAMES = {
   3 => '1v1 RM',
   4 => 'Team RM',
@@ -159,11 +164,13 @@ AOE2DE_MAP_NAMES = {
   154 => 'Michi',
   155 => 'Team Moats',
   156 => 'Volcanic Island',
+  164 => 'Mountain Range',
   169 => 'Enclosed',
   170 => 'Haboob',
   172 => 'Land Madness',
   174 => 'Wade',
   175 => 'Morass',
+  177 => 'Cliffbound',
   180 => 'Golden Stream',
   185 => 'The Passage',
 }
@@ -309,7 +316,7 @@ def aoe2rec_parse_de_header(io, save_version)
     r[:selected_map_id], r[:resolved_map_id],
     r[:reveal_map], r[:victory_type_id],
     r[:starting_resources_id], r[:starting_age_id],
-    r[:ending_age_id], r[:game_type],
+    r[:ending_age_id], r[:game_mode],
     separator1, separator2,
     r[:speed], r[:treaty_length],
     r[:population_limit], r[:player_count],
@@ -341,6 +348,7 @@ def aoe2rec_parse_de_header(io, save_version)
 
   if save_version >= 13.34
     r[:sub_game_mode], r[:battle_royale_time] = io.read(8).unpack('LL')
+    r[:regicide_mode] = to_bool(r[:sub_game_mode][2])  # Regicide Mode checkbox
   end
 
   if save_version >= 25.06
@@ -363,8 +371,8 @@ def aoe2rec_parse_de_header(io, save_version)
 
   r[:unknown_de] << io.read(9)
   r[:fog_of_war] = io.read(1).unpack1('C')
-  r[:cheat_notifications] = io.read(1).unpack1('C')
-  r[:colored_chat] = io.read(1).unpack1('C')
+  r[:cheat_notifications] = to_bool(io.read(1).unpack1('C'))
+  r[:colored_chat] = to_bool(io.read(1).unpack1('C'))
 
   if save_version >= 37
     empty_slot_count = 8 - r[:player_count]
@@ -588,7 +596,7 @@ def aoe2rec_parse_replay(io, save_version)
   r[:player_count_including_gaia] = parts[13]
   r[:instant_build] = parts[14]
   old_cheats_enabled = parts[15]
-  r[:game_mode] = parts[16]
+  old_game_mode = parts[16]
   r[:campaign] = parts[17]
   r[:campaign_player] = parts[18]
   r[:campain_scenario] = parts[19]
@@ -605,6 +613,7 @@ def aoe2rec_parse_replay(io, save_version)
   raise if timer != 0
   raise if temp_pause != 0
   raise if old_cheats_enabled != 0
+  raise if old_game_mode != 0
 
   count = save_version >= 61.5 ? r[:player_count_including_gaia] : 9
   r[:player_time_delta] = io.read(count * 4).unpack('L*')
@@ -639,19 +648,24 @@ def aoe2rec_parse_map(io, save_version)
 
   # TODO: this has got to be slow... parse the tiles if the user requests it
   r[:tiles] = tile_count.times.collect do |i|
-    tile = { }
+    tile = { unknown: [] }
     tile[:terrain_type] = terrain_type = io.read(1).ord
 
-    padding1 = io.read(1).unpack1('c')
-    raise if padding1 != -1
+    # Next byte is almost always -1, but I saw several instances of 45 on a
+    # Cliffbound Regicide game.
+    tile[:unknown] << io.read(1).unpack1('c')
 
     if save_version >= 62.0
+      # Next byte is almost always equal to terrain_type.  Maybe for blending
+      # two types of terrain.
       terrain_type2 = io.read(1).ord
-      tile[:terrain_type2] = terrain_type2 if terrain_type2 != terrain_type
+      tile[:terrain_type2] = terrain_type2
     end
 
     tile[:elevation] = io.read(1).ord
-    padding2, tile[:unknown] = io.read(4).unpack('ss')
+    parts = io.read(4).unpack('ss')
+    padding2 = parts[0]
+    tile[:unknown] << parts[1]
     raise if padding2 != -1
 
     # TODO: also if "check.val" > 1000 we're supposed to run this part of the code,

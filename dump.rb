@@ -9,15 +9,26 @@ def dump_header(header)
   puts "File format version: #{header.fetch(:save_version)}"
   puts "Build: ##{header.fetch(:build)}"
   puts "Date: " + Time.at(header.fetch(:timestamp)).strftime("%Y-%m-%d %H:%M:%S")
-  puts "Lobby name: " + header.fetch(:lobby_name).to_s
+  if !header.fetch(:lobby_name).empty?
+    puts "Lobby name: " + header.fetch(:lobby_name)
+  end
+
+  if header.fetch(:game_mode) != 0
+    puts "Game mode: " + GAME_MODES.fetch(header[:game_mode], header[:game_mode].to_s)
+  end
+  if header[:regicide_mode]
+    puts "Regicide Mode (checkbox)"
+  end
+  if header[:antiquity_mode]
+    puts "Antiquity Mode"
+  end
+
   map = aoe2de_map_name(header.fetch(:resolved_map_id))
   if header[:selected_map_id] != header[:resolved_map_id]
     map += ", from " + aoe2de_map_name(header.fetch(:selected_map_id))
   end
   puts "Map: " + map
-  if header[:antiquity_mode]
-    puts "Antiquity Mode"
-  end
+
   puts "Players:"
   header[:players].each do |pi|
     puts "  %d %-30s ID %d, FID %d, T %d, PR %d" % [
