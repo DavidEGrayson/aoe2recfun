@@ -32,10 +32,27 @@ def dump_remainder(io)
   $remainder_id += 1
 end
 
+AGES = {
+  0 => 'Standard',
+  2 => 'Dark Age',
+  3 => 'Feudal Age',
+  4 => 'Castle Age',
+  5 => 'Imperial Age',
+  6 => 'Post-Imperial Age',
+}
+
+VICTORY_TYPES = {
+  9 => 'Conquest',
+  11 => 'Last Man Standing',
+}
+
 GAME_MODES = {
   0 => 'Random Map',
   1 => 'Regicide',
+  2 => 'Death Match',
   6 => 'King of the Hill',
+  11 => 'Sudden Death',
+  12 => 'Battle Royale',
   13 => 'Empire Wars',
 }
 
@@ -175,6 +192,9 @@ AOE2DE_MAP_NAMES = {
   175 => 'Morass',
   177 => 'Cliffbound',
   180 => 'Golden Stream',
+  181 => 'Mountain Dunes',
+  182 => 'River Divide',
+  183 => 'Sandrift',
   185 => 'The Passage',
 }
 
@@ -327,6 +347,8 @@ def aoe2rec_parse_de_header(io, save_version)
   raise if separator1 != 155555
   raise if separator2 != 155555
 
+  # reveal_map seems to be 6 for normal games a 1 for explored OR all visible
+
   r[:unknown_de] << io.read(1) if save_version >= 61.3
 
   separator3 = io.read(4).unpack1('L')
@@ -336,7 +358,7 @@ def aoe2rec_parse_de_header(io, save_version)
   r[:trade_enabled] = to_bool(meat[0])
   r[:team_bonus_disabled] = to_bool(meat[1])
   r[:random_positions] = to_bool(meat[2])
-  r[:all_techs] = to_bool(meat[3])
+  r[:full_tech_tree] = to_bool(meat[3])
   r[:num_starting_units] = to_bool(meat[4])
   r[:lock_teams] = to_bool(meat[5])
   r[:lock_speed] = to_bool(meat[6])
@@ -379,7 +401,7 @@ def aoe2rec_parse_de_header(io, save_version)
   r[:players].reject! { |pl| pl[:force_id] == 0xFFFFFFFF }
 
   r[:unknown_de] << io.read(9)
-  r[:fog_of_war] = io.read(1).unpack1('C')
+  r[:reveal_map] = io.read(1).unpack1('C')
   r[:cheat_notifications] = to_bool(io.read(1).unpack1('C'))
   r[:colored_chat] = to_bool(io.read(1).unpack1('C'))
 
@@ -582,9 +604,9 @@ def aoe2rec_parse_de_ai(io, save_version)
 end
 
 # Parse a section of basic info from the header which comes after the AI
-# info and is called "reply" by aoc-mgz
+# info and is called "replay" by aoc-mgz
 def aoe2rec_parse_replay(io, save_version)
-  r = {}
+  r = { unknown_replay: [] }
 
   parts = io.read(7*4 + 1 + 2*4 + 8 + 2 + 1 + 1 + 1 + 2 + 3*4 + 4 + 1 + 1 + 4).unpack(
     'LLLLLFFCllLLSCCCSLLLLCCL')
@@ -605,7 +627,7 @@ def aoe2rec_parse_replay(io, save_version)
   r[:player_count_including_gaia] = parts[13]
   r[:instant_build] = parts[14]
   old_cheats_enabled = parts[15]
-  old_game_mode = parts[16]
+  r[:unknown_replay] << parts[16]  # dunno what this is; usually 0, sometimes 1
   r[:campaign] = parts[17]
   r[:campaign_player] = parts[18]
   r[:campain_scenario] = parts[19]
@@ -621,7 +643,6 @@ def aoe2rec_parse_replay(io, save_version)
   raise if timer != 0
   raise if temp_pause != 0
   raise if old_cheats_enabled != 0
-  raise if old_game_mode != 0
 
   count = save_version >= 61.5 ? r[:player_count_including_gaia] : 9
   r[:player_time_delta] = io.read(count * 4).unpack('L*')
@@ -652,7 +673,9 @@ def aoe2rec_parse_map(io, save_version)
     zone
   end
 
-  r[:all_visible], r[:fog_of_war] = io.read(2).unpack('CC')
+  old_all_visible, r[:fog_of_war] = io.read(2).unpack('CC')
+
+  raise if old_all_visible != 0
 
   # TODO: this has got to be slow... parse the tiles if the user requests it
   r[:tiles] = tile_count.times.collect do |i|
@@ -728,8 +751,7 @@ def aoe2rec_parse_compressed_header(header)
   r.merge! aoe2rec_parse_replay(io, save_version)
   r.merge! aoe2rec_parse_map(io, save_version)
 
-  dump_remainder(io)
-
+  # dump_remainder(io)
   # NOTE: There is other stuff in the header that we have not parsed.
 
   r
@@ -768,6 +790,11 @@ def aoe2rec_parse_header(io)
     raise "rec_player mismatch: #{r[:rec_player]} != #{r[:rec_force_id]}."
   end
   r.delete(:rec_player)
+
+  if r[:game_speed_float] != r[:speed]
+    raise "game_speed_float mismatch: #{r[:game_speed_float]} != #{r[:speed]}"
+  end
+  r.delete(:game_speed_float)
 
   r
 end

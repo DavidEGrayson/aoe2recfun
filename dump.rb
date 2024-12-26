@@ -14,10 +14,35 @@ def dump_header(header)
   end
 
   if header.fetch(:game_mode) != 0
-    puts "Game mode: " + GAME_MODES.fetch(header[:game_mode], header[:game_mode].to_s)
+    mode = header[:game_mode]
+    puts "Game mode: " + GAME_MODES.fetch(mode, mode.to_s)
+  end
+  if (header.fetch(:speed) - 1.69).abs > 0.001
+    puts "Speed: %0.2f" % header[:speed]
+  end
+  if header.fetch(:starting_age_id) != 0
+    id = header[:starting_age_id]
+    puts "Starting age: " + AGES.fetch(id, id.to_s)
+  end
+  if header.fetch(:ending_age_id) != 0
+    id = header[:ending_age_id]
+    puts "Ending age: " + AGES.fetch(id, id.to_s)
+  end
+  if header.fetch(:victory_type_id) != 9
+    id = header.fetch(:victory_type_id)
+    puts "Victory: " + VICTORY_TYPES.fetch(id, id.to_s)
+  end
+  if header[:lock_speed]
+    puts "Lock Speed"
+  end
+  if header[:full_tech_tree]
+    puts "Full tech tree"
+  end
+  if header[:turbo_enabled]
+    puts "Turbo mode"
   end
   if header[:regicide_mode]
-    puts "Regicide Mode (checkbox)"
+    puts "Regicide mode (checkbox)"
   end
   if header[:sudden_death_mode]
     puts "Sudden Death mode (checkbox)"
@@ -48,7 +73,9 @@ def dump_header(header)
     # Dump more potentially useful stuff from the header
     header = header.dup
     info_printed = %i{inflated_header players empty_slots resolved_map_id selected_map_id
-      build lobby_name save_version timestamp ai_strings ai_scripts map_zones tiles game_mode}
+      build lobby_name save_version timestamp ai_strings ai_scripts map_zones tiles game_mode
+      regicide_mode empire_wars_mode sudden_death_mode antiquity_mode
+      starting_age_id ending_age_id}
     info_printed.each do |sym|
       header.delete(sym)
     end
