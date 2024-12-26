@@ -19,6 +19,12 @@ def dump_header(header)
   if header[:regicide_mode]
     puts "Regicide Mode (checkbox)"
   end
+  if header[:sudden_death_mode]
+    puts "Sudden Death mode (checkbox)"
+  end
+  if header[:empire_wars_mode]
+    puts "Empire Wars mode (checkbox)"
+  end
   if header[:antiquity_mode]
     puts "Antiquity Mode"
   end
@@ -42,7 +48,7 @@ def dump_header(header)
     # Dump more potentially useful stuff from the header
     header = header.dup
     info_printed = %i{inflated_header players empty_slots resolved_map_id selected_map_id
-      build lobby_name save_version timestamp ai_strings ai_scripts map_zones tiles}
+      build lobby_name save_version timestamp ai_strings ai_scripts map_zones tiles game_mode}
     info_printed.each do |sym|
       header.delete(sym)
     end

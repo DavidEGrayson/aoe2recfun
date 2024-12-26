@@ -35,6 +35,8 @@ end
 GAME_MODES = {
   0 => 'Random Map',
   1 => 'Regicide',
+  6 => 'King of the Hill',
+  13 => 'Empire Wars',
 }
 
 LEADERBOARD_NAMES = {
@@ -164,6 +166,7 @@ AOE2DE_MAP_NAMES = {
   154 => 'Michi',
   155 => 'Team Moats',
   156 => 'Volcanic Island',
+  159 => 'Frigid Lake',
   164 => 'Mountain Range',
   169 => 'Enclosed',
   170 => 'Haboob',
@@ -347,8 +350,14 @@ def aoe2rec_parse_de_header(io, save_version)
   r[:team_positions] = to_bool(meat[14])
 
   if save_version >= 13.34
-    r[:sub_game_mode], r[:battle_royale_time] = io.read(8).unpack('LL')
-    r[:regicide_mode] = to_bool(r[:sub_game_mode][2])  # Regicide Mode checkbox
+    sub_game_mode = io.read(4).unpack1('L')
+    if (sub_game_mode >> 3) != 0
+      raise "Unexpected bit set in sub_game_mode: 0x%x.%" % sub_game_mode
+    end
+    r[:empire_wars_mode] = to_bool(sub_game_mode[0])   # checkbox
+    r[:sudden_death_mode] = to_bool(sub_game_mode[1])  # checkbox
+    r[:regicide_mode] = to_bool(sub_game_mode[2])      # checkbox
+    r[:battle_royale_time] = io.read(4).unpack1('L')
   end
 
   if save_version >= 25.06
@@ -591,7 +600,7 @@ def aoe2rec_parse_replay(io, save_version)
   r[:next_object_id] = parts[8]
   r[:next_reusable_object_id] = parts[9]
   r[:random_seed] = parts[10]
-  random_seed_2 = parts[11]
+  r[:random_seed_2] = parts[11]  # usually the same as random_seed, not always
   r[:rec_player] = parts[12]
   r[:player_count_including_gaia] = parts[13]
   r[:instant_build] = parts[14]
@@ -605,7 +614,6 @@ def aoe2rec_parse_replay(io, save_version)
   r[:king_campaign_scenario] = parts[22]
   r[:player_turn] = parts[23]
 
-  raise if random_seed_2 != r.fetch(:random_seed)
   raise if old_time != 0
   raise if world_time != 0
   raise if old_world_time != 0
