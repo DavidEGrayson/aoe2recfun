@@ -462,6 +462,8 @@ def aoe2rec_parse_de_ai(io, save_version)
   r[:unknown_ai] << io.read(2).unpack1('S')
   r[:unknown_ai] << io.read(3).unpack('CCC')
 
+  r[:unknown_ai] += io.read(16).unpack('LLLL')
+
   p r[:unknown_ai]
 
   $stderr.puts "Warning: don't know how to parse the rest of this AI data (has_ai=#{has_ai})"
@@ -473,19 +475,46 @@ def aoe2rec_parse_de_ai(io, save_version)
 
   io = StringIO.new(remainder)  # tmphax
 
+  last_seq = -1
+  while true
+    offset = io.tell
+    six_pack_header = io.read(24)
+    parts = six_pack_header.unpack('llssCCsLL')
+    if parts[0] != 1 || parts[1] != 1 || parts[3] != -1
+      raise "Six-pack clump pattern ended at 0x%x: %s" % [offset, six_pack_header.hex_inspect]
+    end
+    seq = parts[2]
+    if seq != last_seq + 1
+      raise "Six-pack clump sequence pattern ended."
+    end
+    last_seq = seq
+    clump = { unknown: [parts[2], parts[4], parts[6], parts[7], parts[8]] }
+    six_pack_count = parts[5]
+    clump[:six_packs] = six_pack_count.times.collect do
+      six_pack = io.read(6*4).unpack('LLLLLL')
+      if ![1, 2, 3].include?(six_pack[0])
+        raise "Unexpected six-pack at 0x%x: %s" % [io.tell, six_pack.inspect]
+      end
+      six_pack
+    end
+    puts "Six-pack clump: #{clump.inspect}"
+  end
+
   # I found a pattern!  If we treat the remainder as a bunch of signed ints,
   # we occasionally see ones less than -60000 which form an ascending pattern.
   # So I think it's two shorts: a sequence number starting at 0, and -1.
   # Before this 4-byte pattern, we always see 3 ints: 0, 1, 1.
-  last_special_offset = 0
-  1000.times do
-    offset = io.tell
-    value = io.read(4).unpack1('l')
-    if value < -60000
-      puts "S 0x%06x: %d (%d since last special)" % [offset, value, offset - last_special_offset]
-      last_special_offset = offset
-    else
-      puts "  0x%06x: %d" % [offset, value]
+  if false
+    last_special_offset = 0
+    1000.times do
+      offset = io.tell
+      value = io.read(4).unpack1('l')
+      if value < -60000
+        puts "S 0x%06x: %d (%d since last special)" % [offset, value, offset - last_special_offset]
+        last_special_offset = offset
+      else
+        puts "  0x%06x: %d" % [offset, value]
+      end
     end
   end
 
