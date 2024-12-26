@@ -9,9 +9,21 @@ require 'digest/sha2'
 require 'json'
 
 class String
+  # for debugging
   def hex_inspect
     '"' + each_byte.map { |b| '\x%02x' % b }.join + '"'
   end
+end
+
+# for debugging
+def dump_remainder(io)
+  $remainder_id ||= 0
+  remainder_offset = io.tell
+  filename = "remainder%d.bin" % $remainder_id
+  puts "Dumping from offset %x to #{filename} for inspection\n" % remainder_offset
+  File.open(filename, 'wb') { |f| f.write(io.read) }
+  io.seek(remainder_offset)
+  $remainder_id += 1
 end
 
 LEADERBOARD_NAMES = {
@@ -146,6 +158,7 @@ AOE2DE_MAP_NAMES = {
   172 => 'Land Madness',
   174 => 'Wade',
   175 => 'Morass',
+  180 => 'Golden Stream',
 }
 
 def aoe2de_map_name(id)
@@ -468,7 +481,7 @@ def aoe2rec_parse_de_ai(io, save_version)
 
   raise "Unexpected ai_count (#{ai_count})" if ai_count != 8
 
-  r[:ais] = []
+  r[:ai_scripts] = []
   ai_count.times do |i|
     ai_header = io.read(16)
     ai_header_parts = ai_header.unpack('llssl')
@@ -513,21 +526,12 @@ def aoe2rec_parse_de_ai(io, save_version)
       end
       clump
     end
-    ai_dump = ai.dup
-    ai_dump.delete(:six_pack_clumps)
-    p ai_dump
-    r[:ais] << ai
+    r[:ai_scripts] << ai
   end
 
   r[:unknown_ai] << io.read(4).unpack1('L')  # 0 or 100, thought it was a count
   r[:unknown_ai] << io.read(100)
   r[:unknown_ai] << io.read(4)
-
-  # tmphax: make remainder.bin
-  remainder_offset = io.tell
-  puts "Dumping from offset %x to remainder.bin for inspection\n" % remainder_offset
-  File.open('remainder.bin', 'wb') { |f| f.write(io.read) }
-  io.seek(remainder_offset)
 
   expected_ff_byte_count = 2624
   ff = io.read(expected_ff_byte_count)
@@ -579,6 +583,8 @@ def aoe2rec_parse_compressed_header(header)
 
   r.merge! aoe2rec_parse_de_header(io, r[:save_version])
   r.merge! aoe2rec_parse_de_ai(io, r[:save_version])
+
+  dump_remainder(io)
 
   # NOTE: There is other stuff in the header that we have not parsed.
 

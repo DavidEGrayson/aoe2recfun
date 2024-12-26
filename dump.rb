@@ -10,7 +10,11 @@ def dump_header(header)
   puts "Build: ##{header.fetch(:build)}"
   puts "Date: " + Time.at(header.fetch(:timestamp)).strftime("%Y-%m-%d %H:%M:%S")
   puts "Lobby name: " + header.fetch(:lobby_name).to_s
-  puts "Map: " + aoe2de_map_name(header.fetch(:resolved_map_id))
+  map = aoe2de_map_name(header.fetch(:resolved_map_id))
+  if header[:selected_map_id] != header[:resolved_map_id]
+    map += ", from " + aoe2de_map_name(header.fetch(:selected_map_id))
+  end
+  puts "Map: " + map
   puts "Players:"
   header[:players].each do |pi|
     puts "  %d %-30s ID %d, FID %d, T %d, PR %d" % [
@@ -23,8 +27,8 @@ def dump_header(header)
   if true
     # Dump more potentially useful stuff from the header
     header = header.dup
-    info_printed = %i{inflated_header players empty_slots resolved_map_id
-      build lobby_name save_version timestamp ai_strings ais}
+    info_printed = %i{inflated_header players empty_slots resolved_map_id selected_map_id
+      build lobby_name save_version timestamp ai_strings ai_scripts}
     info_printed.each do |sym|
       header.delete(sym)
     end
