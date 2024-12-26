@@ -305,7 +305,7 @@ def aoe2rec_parse_de_header(io, save_version)
     r[:ending_age_id], r[:game_type],
     separator1, separator2,
     r[:speed], r[:treaty_length],
-    r[:population_limit], r[:num_players],
+    r[:population_limit], r[:player_count],
     r[:unused_player_color], r[:victory_amount] = meat
   raise if separator1 != 155555
   raise if separator2 != 155555
@@ -331,7 +331,7 @@ def aoe2rec_parse_de_header(io, save_version)
   end
 
   if save_version >= 25.06
-    r[:handicap] = io.read(1)
+    r[:handicap_enabled] = io.read(1).ord
   end
 
   r[:unknown_de] << io.read(1) if save_version >= 50
@@ -340,7 +340,7 @@ def aoe2rec_parse_de_header(io, save_version)
 
   raise if separator4 != 155555
 
-  player_array_count = save_version >= 37 ? r[:num_players] : 8
+  player_array_count = save_version >= 37 ? r[:player_count] : 8
   raise if player_array_count > 8
 
   r[:players] = (1..player_array_count).collect do |id|
@@ -354,7 +354,7 @@ def aoe2rec_parse_de_header(io, save_version)
   r[:colored_chat] = io.read(1).unpack1('C')
 
   if save_version >= 37
-    empty_slot_count = 8 - r[:num_players]
+    empty_slot_count = 8 - r[:player_count]
     r[:empty_slots] = (0...empty_slot_count).map do
       slot = { unknown: [] }
       if save_version >= 61.5
@@ -556,7 +556,8 @@ def aoe2rec_parse_replay(io, save_version)
   old_time, world_time, old_world_time, r[:game_speed_id],
     world_time_delta_seconds, timer, r[:game_speed_float],
     temp_pause, r[:next_object_id], r[:next_reusable_object_id],
-    r[:random_seed], r[:random_seed_2], r[:rec_player], r[:player_count],
+    r[:random_seed], random_seed_2, r[:rec_player],
+    r[:player_count_including_gaia],
     r[:instant_build], r[:cheats_enabled], r[:game_mode],
     r[:campaign], r[:campaign_player], r[:campain_scenario],
     r[:king_campaign], r[:king_campaign_player], r[:king_campaign_scenario],
@@ -564,6 +565,7 @@ def aoe2rec_parse_replay(io, save_version)
     io.read(7*4 + 1 + 2*4 + 8 + 2 + 1 + 1 + 1 + 2 + 3*4 + 4 + 1 + 1 + 4).unpack(
       'LLLLLFFCllLLSCCCSSLLLLCCL')
 
+  raise if random_seed_2 != r.fetch(:random_seed)
   raise if old_time != 0
   raise if world_time != 0
   raise if old_world_time != 0
@@ -571,11 +573,11 @@ def aoe2rec_parse_replay(io, save_version)
   raise if timer != 0
   raise if temp_pause != 0
 
-  count = save_version >= 61.5 ? r[:player_count] : 9
+  count = save_version >= 61.5 ? r[:player_count_including_gaia] : 9
   r[:player_time_delta] = io.read(count * 4).unpack('L*')
 
-  r[:replay_padding] = io.read(8)
-  raise if r[:replay_padding] != "\xad\xde\xad\xde\x03\0\0\0".b
+  padding = io.read(8)
+  raise if padding != "\xad\xde\xad\xde\x03\0\0\0".b
 
   r
 end
@@ -688,17 +690,34 @@ def aoe2rec_parse_header(io)
   r = aoe2rec_parse_compressed_header(header)
 
   parts = io.read(32).unpack('VVVVVVVV')
-  r[:log_version] = parts[0]
-  r[:force_id] = parts[4]
-  r[:other_version] = parts[7]
+  log_version = parts[0]
+  r[:rec_force_id] = parts[4]
+  other_version = parts[7]
   r[:unknown] = [ parts[1], parts[2], parts[3], parts[5], parts[6] ]
 
-  if r[:log_version] != 5
+  if log_version != 5
     raise "Expected log_version to be 5, got #{r[:log_version]}."
   end
-  if r[:other_version] != 0
+  if other_version != 0
     raise "Expected other_version to be 0, got #{r[:other_version]}."
   end
+
+  # Remove redundant header info
+
+  if r[:player_count_including_gaia] != r[:player_count] + 1
+    raise "Player count mismatch: #{r[:player_count]} != #{r[:player_count] + 1}."
+  end
+  r.delete(:player_count_including_gaia)
+
+  if r[:cheats_enabled] != r[:cheats]
+    raise "Cheats mismatch: #{r[:cheats_enabled]} != #{r[:cheats]}."
+  end
+  r.delete(:cheats_enabled)
+
+  if r[:rec_player] != r[:rec_force_id]
+    raise "rec_player mismatch: #{r[:rec_player]} != #{r[:rec_force_id]}."
+  end
+  r.delete(:rec_player)
 
   r
 end
@@ -806,8 +825,8 @@ def aoe2rec_parse_postgame(io)
       r[:leaderboards] = leaderboard_count.times.collect do
         lb = {}
         lb[:id], lb[:unknown] = bio.read(4+2).unpack('LS')
-        player_count = bio.read(4).unpack1('L')
-        lb[:players] = player_count.times.collect do
+        lb_player_count = bio.read(4).unpack1('L')
+        lb[:players] = lb_player_count.times.collect do
           player = {}
           id_minus_1, player[:rank], player[:rating] = \
             bio.read(3*4).unpack('lll')

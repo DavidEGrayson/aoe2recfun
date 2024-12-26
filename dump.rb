@@ -22,7 +22,7 @@ def dump_header(header)
       pi.fetch(:player_id), pi.fetch(:force_id), pi.fetch(:type), pi.fetch(:profile_id),
     ]
   end
-  puts "Recorded by FID #{header.fetch(:force_id)}"
+  puts "Recorded by FID #{header.fetch(:rec_force_id)}"
 
   if true
     # Dump more potentially useful stuff from the header
@@ -32,7 +32,7 @@ def dump_header(header)
     info_printed.each do |sym|
       header.delete(sym)
     end
-    p header
+    puts "Maybe interesting header data: " + header.inspect
   end
 end
 
