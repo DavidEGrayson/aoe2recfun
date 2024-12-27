@@ -26,7 +26,7 @@ def dump_remainder(io)
   $remainder_id ||= 0
   remainder_offset = io.tell
   filename = "remainder%d.bin" % $remainder_id
-  puts "Dumping from offset %x to #{filename} for inspection\n" % remainder_offset
+  puts "Dumping from offset 0x%x to #{filename} for inspection\n" % remainder_offset
   File.open(filename, 'wb') { |f| f.write(io.read) }
   io.seek(remainder_offset)
   $remainder_id += 1
@@ -675,7 +675,7 @@ def aoe2rec_parse_replay(io, save_version)
 end
 
 def aoe2rec_parse_map(io, save_version)
-  r = {}
+  r = { unknown_map: [] }
 
   r[:size_x], r[:size_y], zone_count = io.read(12).unpack('LLL')
 
@@ -698,38 +698,76 @@ def aoe2rec_parse_map(io, save_version)
 
   raise if old_all_visible != 0
 
-  # TODO: this has got to be slow... parse the tiles if the user requests it
-  r[:tiles] = tile_count.times.collect do |i|
-    tile = { unknown: [] }
-    tile[:terrain_type] = terrain_type = io.read(1).ord
+  bytes_per_tile = 7
+  bytes_per_tile += 1 if save_version >= 62.0
+  bytes_per_tile += 2 if save_version >= 13.03
+  r[:bytes_per_tile] = bytes_per_tile
+  r[:tile_data] = io.read(tile_count * bytes_per_tile)
 
-    # Next byte is almost always -1, but I saw several instances of 45 on a
-    # Cliffbound Regicide game.
-    tile[:unknown] << io.read(1).unpack1('c')
-
-    if save_version >= 62.0
-      # Next byte is almost always equal to terrain_type.  Maybe for blending
-      # two types of terrain.
-      terrain_type2 = io.read(1).ord
-      tile[:terrain_type2] = terrain_type2
-    end
-
-    tile[:elevation] = io.read(1).ord
-    parts = io.read(4).unpack('ss')
-    padding2 = parts[0]
-    tile[:unknown] << parts[1]
-    raise if padding2 != -1
-
-    # TODO: also if "check.val" > 1000 we're supposed to run this part of the code,
-    # according to aoc-mgz, but maybe we don't care about supporting DE recs
-    # that are older than 13.03 properly.
-    if save_version >= 13.03
-      unknown2 = io.read(2).unpack1('s')
-      tile[:unknown2] = unknown2 if unknown2 != tile[:unknown]
-    end
-
-    tile
+  # aoc-mgz says this has something to do with "obstructions"
+  stuff_count = io.read(4).unpack1('L')
+  r[:unknown_map] << io.read(4).unpack1('L')
+  r[:unknown_map] << io.read(stuff_count * 4).unpack('C*')
+  r[:unknown_map] << stuff_count.times.collect do
+    count = io.read(4).unpack1('L')
+    io.read(count * 2 * 4).unpack('l*')
   end
+
+  size_x_copy, size_y_copy = io.read(8).unpack('LL')
+  if size_x_copy != r[:size_x] || size_y_copy != r[:size_y]
+    raise "Size mismatch: #{size_x_copy},#{size_y_copy} != #{r[:size_x]},#{r[:size_y]}."
+  end
+
+  visibility_bytes_per_tile = save_version >= 61.5 ? 8 : 4
+  r[:visibility_data] = io.read(tile_count * visibility_bytes_per_tile)
+
+  r
+end
+
+# Parse some info about the initial state of a player, from the "initial"
+# section in the compressed header.
+def aoe2rec_parse_initial_player(io, save_version, player_count)
+  init_player = { unknown: [] }
+
+  init_player[:type] = io.read(1).ord
+  init_player[:unknown] << io.read(1).ord
+
+  init_player[:their_diplomacy] = io.read(player_count + 1)
+  my_diplomacy_count = save_version >= 61.5 ? player_count + 1 : 9
+  init_player[:my_diplomacy] = io.read(my_diplomacy_count * 4)
+
+  init_player[:allied_los] = to_bool(io.read(4).unpack1('L'))
+  init_player[:allied_victory] = to_bool(io.read(1).unpack1('C'))
+
+  name_length = io.read(2).unpack1('S')
+  init_player[:name] = io.read(name_length).chomp("\x00")
+  unk2 = io.read(1).ord
+  raise if unk2 != 0x16
+  header_data_count = io.read(4).unpack1('L')
+  unk3 = io.read(1).ord
+  raise if unk3 != 0x21
+
+  # TODO: finish
+
+  p init_player
+  exit 1  # tmphax: don't return from here until we are done parsing the player/attributes
+
+  ip
+end
+
+def aoe2rec_parse_initial(io, save_version, player_count)
+  r = { unknown_initial: [] }
+
+  r[:restore_time], particle_count = io.read(8).unpack('LL')
+  r[:particle_data] = io.read(particle_count * 27)
+  r[:unknown_initial] << io.read(4).unpack('L')  # aoc-mgz says "identifiier"
+  r[:initial_players] = (player_count + 1).times.collect do
+    aoe2rec_parse_initial_player(io, save_version, player_count)
+  end
+  r[:unknown_initial] << io.read(21)
+
+  #dump_remainder(io)
+  #p r
 
   r
 end
@@ -770,6 +808,7 @@ def aoe2rec_parse_compressed_header(header)
   r.merge! aoe2rec_parse_de_ai(io, save_version)
   r.merge! aoe2rec_parse_replay(io, save_version)
   r.merge! aoe2rec_parse_map(io, save_version)
+  r.merge! aoe2rec_parse_initial(io, save_version, r.fetch(:player_count))
 
   # dump_remainder(io)
   # NOTE: There is other stuff in the header that we have not parsed.
@@ -790,7 +829,7 @@ def aoe2rec_parse_header(io)
   log_version = parts[0]
   r[:rec_force_id] = parts[4]
   other_version = parts[7]
-  r[:unknown] = [ parts[1], parts[2], parts[3], parts[5], parts[6] ]
+  r[:unknown_root] = [ parts[1], parts[2], parts[3], parts[5], parts[6] ]
 
   if log_version != 5
     raise "Expected log_version to be 5, got #{r[:log_version]}."

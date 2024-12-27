@@ -110,11 +110,11 @@ def dump_header(header)
     # Dump more potentially useful stuff from the header
     header = header.dup
     info_printed = %i{inflated_header players empty_slots resolved_map_id selected_map_id
-      build lobby_name save_version timestamp ai_strings ai_scripts map_zones tiles game_mode
+      build lobby_name save_version timestamp ai_strings ai_scripts map_zones tile_data tiles game_mode
       regicide_mode empire_wars_mode sudden_death_mode antiquity_mode full_tech_tree
       starting_age_id ending_age_id size_x size_y population_limit lock_speed
       turbo_enabled starting_resources_id lock_teams team_positions random_positions
-      battle_royale_time cheats_enabled shared_exploration treaty_length}
+      battle_royale_time cheats_enabled shared_exploration treaty_length visibility_data}
     info_printed.each do |sym|
       header.delete(sym)
     end
