@@ -741,18 +741,42 @@ def aoe2rec_parse_initial_player(io, save_version, player_count)
 
   name_length = io.read(2).unpack1('S')
   init_player[:name] = io.read(name_length).chomp("\x00")
+  puts "init player name: #{init_player[:name]}"
   unk2 = io.read(1).ord
   raise if unk2 != 0x16
   header_data_count = io.read(4).unpack1('L')
   unk3 = io.read(1).ord
   raise if unk3 != 0x21
 
-  # TODO: finish
+  # These are all 32-bit floats but we don't bother to parse them for now.
+  stats_size = header_data_count * (save_version >= 63 ? 8 : 4)
+  init_player[:stats] = io.read(stats_size)
 
-  p init_player
-  exit 1  # tmphax: don't return from here until we are done parsing the player/attributes
+  unk4 = io.read(1).ord
+  raise if unk4 != 0x0B
 
-  ip
+  init_player[:camera_x], init_player[:camera_y] = io.read(8).unpack('FF')
+  saved_view_count = io.read(4).unpack1('l')
+  if saved_view_count > 0
+    init_player[:saved_views] = saved_view_count.times.collect do
+      io.read(8).unpack('FF')
+    end
+  end
+
+  parts = io.read(11).unpack('SSCCCCCCC')
+  init_player[:spawn_location_x] = parts[0]
+  init_player[:spawn_location_y] = parts[1]
+  init_player[:culture] = parts[2]
+  init_player[:civilization] = parts[3]
+  init_player[:game_status] = parts[4]
+  init_player[:resigned] = to_bool(parts[5])
+  raise if parts[6] != 0
+  init_player[:color] = parts[7]
+  raise if parts[8] != 0
+
+  raise 'TODO: need to parse player objects'
+
+  init_player
 end
 
 def aoe2rec_parse_initial(io, save_version, player_count)
@@ -765,10 +789,6 @@ def aoe2rec_parse_initial(io, save_version, player_count)
     aoe2rec_parse_initial_player(io, save_version, player_count)
   end
   r[:unknown_initial] << io.read(21)
-
-  #dump_remainder(io)
-  #p r
-
   r
 end
 
