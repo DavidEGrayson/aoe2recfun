@@ -729,7 +729,7 @@ end
 def aoe2rec_parse_initial_player(io, save_version, player_count)
   init_player = { unknown: [] }
 
-  init_player[:type] = io.read(1).ord
+  init_player[:type] = io.read(1).ord  # 2 for Gaia, 11 for player?
   init_player[:unknown] << io.read(1).ord
 
   init_player[:their_diplomacy] = io.read(player_count + 1)
@@ -744,12 +744,12 @@ def aoe2rec_parse_initial_player(io, save_version, player_count)
   puts "init player name: #{init_player[:name]}"
   unk2 = io.read(1).ord
   raise if unk2 != 0x16
-  header_data_count = io.read(4).unpack1('L')
+  stats_count = io.read(4).unpack1('L')
   unk3 = io.read(1).ord
   raise if unk3 != 0x21
 
   # These are all 32-bit floats but we don't bother to parse them for now.
-  stats_size = header_data_count * (save_version >= 63 ? 8 : 4)
+  stats_size = stats_count * (save_version >= 63 ? 8 : 4)
   init_player[:stats] = io.read(stats_size)
 
   unk4 = io.read(1).ord
@@ -773,6 +773,24 @@ def aoe2rec_parse_initial_player(io, save_version, player_count)
   raise if parts[6] != 0
   init_player[:color] = parts[7]
   raise if parts[8] != 0
+
+  init_player[:unknown] << io.read(0xED)
+
+  count = io.read(4).unpack1('L')
+
+  init_player[:unknown_structs] = count.times.collect do
+    s = { unknown: [] }
+    s[:unknown] += io.read(18).unpack('ssssssCssC')
+    s[:unknown] << aoe2rec_parse_de_string(io)
+    s[:unknown] << aoe2rec_parse_de_string(io)
+    s[:unknown] += io.read(32).unpack('CssllsssssssssC')
+    s
+  end
+  init_player[:unknown_structs][0,30].each do |s|
+    p s
+  end
+
+  dump_remainder(io)
 
   raise 'TODO: need to parse player objects'
 
