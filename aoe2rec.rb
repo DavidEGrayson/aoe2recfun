@@ -786,11 +786,17 @@ def aoe2rec_parse_initial_player(io, save_version, player_count)
     s[:unknown] += io.read(32).unpack('CssllsssssssssC')
     s
   end
-  init_player[:unknown_structs][0,30].each do |s|
-    p s
-  end
 
-  dump_remainder(io)
+  init_player[:unknown] << io.read(0x1B9)
+  init_player[:unknown] << io.read(11 * 4 + 3).unpack('LLLLLLLLCCCCLLCCC')
+  init_player[:unknown] << io.read(0x5B)
+
+  p init_player[:unknown]
+
+  512.times do |i|
+    v = io.read(4).unpack1('L')
+    puts "%x: %x" % [i, v]
+  end
 
   raise 'TODO: need to parse player objects'
 
@@ -803,6 +809,11 @@ def aoe2rec_parse_initial(io, save_version, player_count)
   r[:restore_time], particle_count = io.read(8).unpack('LL')
   r[:particle_data] = io.read(particle_count * 27)
   r[:unknown_initial] << io.read(4).unpack('L')  # aoc-mgz says "identifiier"
+
+  # tmphax
+  dump_remainder(io)
+  return r
+
   r[:initial_players] = (player_count + 1).times.collect do
     aoe2rec_parse_initial_player(io, save_version, player_count)
   end
@@ -848,7 +859,6 @@ def aoe2rec_parse_compressed_header(header)
   r.merge! aoe2rec_parse_map(io, save_version)
   r.merge! aoe2rec_parse_initial(io, save_version, r.fetch(:player_count))
 
-  # dump_remainder(io)
   # NOTE: There is other stuff in the header that we have not parsed.
 
   r

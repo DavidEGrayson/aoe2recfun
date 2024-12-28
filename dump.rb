@@ -106,7 +106,7 @@ def dump_header(header)
   end
   puts "Recorded by FID #{header.fetch(:rec_force_id)}"
 
-  if true
+  if false
     # Dump more potentially useful stuff from the header
     header = header.dup
     info_printed = %i{inflated_header players empty_slots resolved_map_id selected_map_id
